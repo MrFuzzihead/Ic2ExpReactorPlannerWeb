@@ -7,7 +7,10 @@ package Ic2ExpReactorPlanner.components;
 
 import java.awt.Image;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+
+import static Ic2ExpReactorPlanner.AutomationSimulator.formatNumber;
 
 /**
  * Represents some kind of vent in a reactor.
@@ -114,5 +117,23 @@ public class Vent extends ReactorItem {
     @Override
     public double getCurrentOutput() {
         return currentVentCooling;
+    }
+
+    @Override
+    public String[] formatTooltip() {
+        List<String> formats = new LinkedList<>();
+        if(maxHeat != 1) {
+            formats.add(formatNumber(maxHeat));
+        }
+        if (selfVent != 0) {
+            formats.add(formatNumber(selfVent));
+        }
+        if (hullDraw != 0) {
+            formats.add(formatNumber(hullDraw));
+        }
+        if (sideVent != 0) {
+            formats.add(formatNumber(sideVent));
+        }
+        return formats.toArray(new String[0]);
     }
 }

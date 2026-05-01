@@ -7,7 +7,10 @@ package Ic2ExpReactorPlanner.components;
 
 import java.awt.Image;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+
+import static Ic2ExpReactorPlanner.AutomationSimulator.formatNumber;
 
 /**
  * Represents a heat exchanger of some sort in a reactor.
@@ -124,5 +127,20 @@ public class Exchanger extends ReactorItem {
     @Override
     public double getHullCoolingCapacity() {
         return switchReactor;
+    }
+
+    @Override
+    public String[] formatTooltip() {
+        List<String> formats= new LinkedList<>();
+        if (maxHeat != 1) {
+            formats.add(formatNumber(maxHeat));
+        }
+        if (switchReactor != 0) {
+            formats.add(formatNumber(switchReactor));
+        }
+        if (switchSide != 0) {
+            formats.add(formatNumber(switchSide));
+        }
+        return formats.toArray(new String[0]);
     }
 }

@@ -27,7 +27,7 @@ if (!disableSpotless) {
     apply from: Blowdryer.file('spotless.gradle')
 }
 
-sourceCompatibility = '1.7'
+sourceCompatibility = '1.8'
 [compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
 
 // NetBeans will automatically add "run" and "debug" tasks relying on the

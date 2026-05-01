@@ -7,6 +7,8 @@ package Ic2ExpReactorPlanner.components;
 
 import java.awt.Image;
 
+import static Ic2ExpReactorPlanner.AutomationSimulator.formatNumber;
+
 /**
  * Represents a condensator in a reactor, either RSH or LZH.
  * @author Brian McCloud
@@ -50,5 +52,12 @@ public class Condensator extends ReactorItem {
     @Override
     public void injectCoolant() {
         currentHeat = 0;
+    }
+
+    @Override
+    public String[] formatTooltip() {
+        return new String[] {
+                formatNumber(maxHeat)
+        };
     }
 }

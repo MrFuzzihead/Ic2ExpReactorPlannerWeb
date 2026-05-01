@@ -7,6 +7,9 @@ package Ic2ExpReactorPlanner.components;
 
 import java.awt.Image;
 
+import static Ic2ExpReactorPlanner.AutomationSimulator.formatNumber;
+import static Ic2ExpReactorPlanner.BundleHelper.getI18n;
+
 /**
  * Represents a neutron reflector in a reactor.
  * @author Brian McCloud
@@ -66,5 +69,17 @@ public class Reflector extends ReactorItem {
 
     public static void setMcVersion(String newVersion) {
         mcVersion = newVersion;
+    }
+
+    @Override
+    public String[] formatTooltip() {
+        if (getMaxDamage() == 1) {
+            return new String[] {
+                    getI18n("ComponentTooltip.Infinite")
+            };
+        }
+        return new String[] {
+                formatNumber(getMaxDamage())
+        };
     }
 }

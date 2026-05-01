@@ -40,40 +40,8 @@ public class GGFuelRod extends FuelRod {
         this.heatBonus = other.heatBonus;
     }
 
-    private int countNeutronNeighbors() {
-        int neutronNeighbors = 0;
-        ReactorItem component = parent.getComponentAt(row + 1, col);
-        if (component != null && component.isNeutronReflector()) {
-            neutronNeighbors++;
-        }
-        component = parent.getComponentAt(row - 1, col);
-        if (component != null && component.isNeutronReflector()) {
-            neutronNeighbors++;
-        }
-        component = parent.getComponentAt(row, col - 1);
-        if (component != null && component.isNeutronReflector()) {
-            neutronNeighbors++;
-        }
-        component = parent.getComponentAt(row, col + 1);
-        if (component != null && component.isNeutronReflector()) {
-            neutronNeighbors++;
-        }
-        return neutronNeighbors;
-    }
-
     @Override
-    public double generateEnergy() {
-        int pulses = countNeutronNeighbors() + 1 + rodCount / 2;
-        double energy =
-                energyMult * pulses * (1 + heatBonus * ((float) parent.getCurrentHeat() / (float) parent.getMaxHeat()));
-        if (GTNHbehavior || "GTNH".equals(sourceMod)) {
-            energy *= 5; // EUx5 if from GTNH or in GTNH mode, no gt bonus
-        }
-        minEUGenerated = Math.min(minEUGenerated, energy);
-        maxEUGenerated = Math.max(maxEUGenerated, energy);
-        currentEUGenerated = energy;
-        parent.addEUOutput(energy);
-        applyDamage(1.0);
-        return energy;
+    protected double getHeatBonus() {
+        return this.heatBonus;
     }
 }

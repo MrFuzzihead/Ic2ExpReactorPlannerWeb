@@ -494,4 +494,8 @@ public class ReactorItem {
     public void injectCoolant() {
         // do nothing by default.
     }
+
+    public String[] formatTooltip() {
+        return null;
+    }
 }

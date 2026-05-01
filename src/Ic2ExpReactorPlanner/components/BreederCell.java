@@ -2,6 +2,8 @@ package Ic2ExpReactorPlanner.components;
 
 import java.awt.*;
 
+import static Ic2ExpReactorPlanner.AutomationSimulator.formatNumber;
+
 public class BreederCell extends ReactorItem {
 
     private final int mHeatBonusStep;
@@ -56,5 +58,12 @@ public class BreederCell extends ReactorItem {
             }
         }
         return 0;
+    }
+
+    @Override
+    public String[] formatTooltip() {
+        return new String[] {
+                formatNumber(maxDamage)
+        };
     }
 }

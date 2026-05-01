@@ -7,6 +7,8 @@ package Ic2ExpReactorPlanner.components;
 
 import java.awt.Image;
 
+import static Ic2ExpReactorPlanner.AutomationSimulator.formatNumber;
+
 /**
  * Represents a coolant cell in a reactor.
  * @author Brian McCloud
@@ -33,5 +35,12 @@ public class CoolantCell extends ReactorItem {
         currentCellCooling += heat;
         bestCellCooling = Math.max(currentCellCooling, bestCellCooling);
         return super.adjustCurrentHeat(heat);
+    }
+
+    @Override
+    public String[] formatTooltip() {
+        return new String[] {
+                formatNumber(maxHeat)
+        };
     }
 }

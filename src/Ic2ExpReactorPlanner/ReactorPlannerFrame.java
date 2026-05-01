@@ -12,6 +12,23 @@ import Ic2ExpReactorPlanner.components.FuelRod;
 import Ic2ExpReactorPlanner.components.GGFuelRod;
 import Ic2ExpReactorPlanner.components.ReactorItem;
 import Ic2ExpReactorPlanner.components.Reflector;
+
+import javax.swing.AbstractButton;
+import javax.swing.BorderFactory;
+import javax.swing.ButtonModel;
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JToggleButton;
+import javax.swing.JFileChooser;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingUtilities;
+import javax.swing.ToolTipManager;
+import javax.swing.border.BevelBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -38,21 +55,6 @@ import java.text.DecimalFormat;
 import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.Properties;
-import javax.swing.AbstractButton;
-import javax.swing.BorderFactory;
-import javax.swing.ButtonModel;
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JFileChooser;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.SpinnerNumberModel;
-import javax.swing.SwingUtilities;
-import javax.swing.ToolTipManager;
-import javax.swing.border.BevelBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 
 /**
  * JFrame to display a gui for planning a Nuclear Reactor using IndustrialCraft2 Experimental.
@@ -2296,6 +2298,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             FuelRod.setGT509Behavior(false);
         }
         materialsArea.setText(reactor.getMaterials().toString());
+        refreshAllComponentTooltips();
         saveAdvancedConfig();
     } // GEN-LAST:event_mcVersionComboActionPerformed
 
@@ -2533,6 +2536,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             GGFuelRod.setGTNHBehavior(false);
         }
         materialsArea.setText(reactor.getMaterials().toString());
+        refreshAllComponentTooltips();
         saveAdvancedConfig();
     } // GEN-LAST:event_gtVersionComboActionPerformed
 
@@ -3167,6 +3171,38 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         copyComparisonButton.setEnabled(true);
     }
 
+    public static String getReactorItemRegisterName(final String name) {
+        if (name == null || name.isEmpty()) return name;
+        switch (name) {
+            case "ReactorHeatExchanger":
+                return "coreHeatExchanger";
+            case "CoolantCell60kHelium":
+                return  "coolantCellHelium60k";
+            case "CoolantCell180kHelium":
+                return "coolantCellHelium180k";
+            case "CoolantCell360kHelium":
+                return "coolantCellHelium360k";
+            case "CoolantCell60kNak":
+                return  "coolantCellNak60k";
+            case "CoolantCell180kNak":
+                return "coolantCellNak180k";
+            case "CoolantCell360kNak":
+                return "coolantCellNak360k";
+            case "CoolantCell180kSpace":
+                return "coolantCellSpace180k";
+            case "CoolantCell360kSpace":
+                return "coolantCellSpace360k";
+            case "CoolantCell540kSpace":
+                return "coolantCellSpace540k";
+            case "CoolantCell1080kSpace":
+                return "coolantCellSpace1080k";
+            case "CoolantCell1GNeutronium":
+                return "coolantCellNeutronium1G";
+            default:
+                return Character.toLowerCase(name.charAt(0)) + name.substring(1);
+        }
+    }
+
     /**
      * @param compType Component type to read from the bundle object
      * @return Assembled tooltip string
@@ -3174,14 +3210,100 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
     private String buildTooltipInfo(final String compType) {
         // modified from Pull Request by kekzdealer: https://github.com/MauveCloud/Ic2ExpReactorPlanner/pull/67
         final StringBuilder result = new StringBuilder(500);
+        final ReactorItem reactorItem = ComponentFactory.getDefaultComponent(getReactorItemRegisterName(compType));
 
         result.append("<html>");
         result.append(getI18n("ComponentName." + compType));
         result.append("<br>");
-        result.append(getI18n("ComponentData." + compType));
+
+        try {
+            result.append(formatI18n("ComponentData." + compType, (Object[]) reactorItem.formatTooltip()));
+        } catch (Exception e) {
+            result.append(getI18n("ComponentData." + compType));
+        }
+
         result.append("</html>");
 
         return result.toString();
+    }
+
+    private void refreshComponentTooltip(JToggleButton button, String componentName) {
+        button.setToolTipText(buildTooltipInfo(componentName));
+    }
+
+    private void refreshAllComponentTooltips() {
+        refreshComponentTooltip(fuelRodUraniumButton, "FuelRodUranium");
+        refreshComponentTooltip(dualFuelRodUraniumButton, "DualFuelRodUranium");
+        refreshComponentTooltip(quadFuelRodUraniumButton, "QuadFuelRodUranium");
+        refreshComponentTooltip(fuelRodMoxButton, "FuelRodMox");
+        refreshComponentTooltip(dualFuelRodMoxButton, "DualFuelRodMox");
+        refreshComponentTooltip(quadFuelRodMoxButton, "QuadFuelRodMox");
+        refreshComponentTooltip(neutronReflectorButton, "NeutronReflector");
+        refreshComponentTooltip(thickNeutronReflectorButton, "ThickNeutronReflector");
+        refreshComponentTooltip(iridiumNeutronReflectorButton, "IridiumNeutronReflector");
+        refreshComponentTooltip(heatVentButton, "HeatVent");
+        refreshComponentTooltip(advancedHeatVentButton, "AdvancedHeatVent");
+        refreshComponentTooltip(reactorHeatVentButton, "ReactorHeatVent");
+        refreshComponentTooltip(componentHeatVentButton, "ComponentHeatVent");
+        refreshComponentTooltip(overclockedHeatVentButton, "OverclockedHeatVent");
+        refreshComponentTooltip(coolantCell10kButton, "CoolantCell10k");
+        refreshComponentTooltip(coolantCell30kButton, "CoolantCell30k");
+        refreshComponentTooltip(coolantCell60kButton, "CoolantCell60k");
+        refreshComponentTooltip(heatExchangerButton, "HeatExchanger");
+        refreshComponentTooltip(advancedHeatExchangerButton, "AdvancedHeatExchanger");
+        refreshComponentTooltip(coreHeatExchangerButton, "ReactorHeatExchanger");
+        refreshComponentTooltip(componentHeatExchangerButton, "ComponentHeatExchanger");
+        refreshComponentTooltip(reactorPlatingButton, "ReactorPlating");
+        refreshComponentTooltip(heatCapacityReactorPlatingButton, "HeatCapacityReactorPlating");
+        refreshComponentTooltip(containmentReactorPlatingButton, "ContainmentReactorPlating");
+        refreshComponentTooltip(rshCondensatorButton, "RshCondensator");
+        refreshComponentTooltip(lzhCondensatorButton, "LzhCondensator");
+        refreshComponentTooltip(fuelRodThoriumButton, "FuelRodThorium");
+        refreshComponentTooltip(dualFuelRodThoriumButton, "DualFuelRodThorium");
+        refreshComponentTooltip(quadFuelRodThoriumButton, "QuadFuelRodThorium");
+        refreshComponentTooltip(coolantCellHelium60kButton, "CoolantCell60kHelium");
+        refreshComponentTooltip(coolantCellHelium180kButton, "CoolantCell180kHelium");
+        refreshComponentTooltip(coolantCellHelium360kButton, "CoolantCell360kHelium");
+        refreshComponentTooltip(coolantCellNak60kButton, "CoolantCell60kNak");
+        refreshComponentTooltip(coolantCellNak180kButton, "CoolantCell180kNak");
+        refreshComponentTooltip(coolantCellNak360kButton, "CoolantCell360kNak");
+        refreshComponentTooltip(coolantCellNeutronium1GButton, "CoolantCell1GNeutronium");
+        refreshComponentTooltip(fuelRodNaquadahButton, "FuelRodNaquadah");
+        refreshComponentTooltip(dualFuelRodNaquadahButton, "DualFuelRodNaquadah");
+        refreshComponentTooltip(quadFuelRodNaquadahButton, "QuadFuelRodNaquadah");
+        refreshComponentTooltip(fuelRodCoaxiumButton, "FuelRodCoaxium");
+        refreshComponentTooltip(dualFuelRodCoaxiumButton, "DualFuelRodCoaxium");
+        refreshComponentTooltip(quadFuelRodCoaxiumButton, "QuadFuelRodCoaxium");
+        refreshComponentTooltip(fuelRodCesiumButton, "FuelRodCesium");
+        refreshComponentTooltip(dualFuelRodCesiumButton, "DualFuelRodCesium");
+        refreshComponentTooltip(quadFuelRodCesiumButton, "QuadFuelRodCesium");
+        refreshComponentTooltip(fuelRodNaquadahGTNHButton, "FuelRodNaquadahGTNH");
+        refreshComponentTooltip(dualFuelRodNaquadahGTNHButton, "DualFuelRodNaquadahGTNH");
+        refreshComponentTooltip(quadFuelRodNaquadahGTNHButton, "QuadFuelRodNaquadahGTNH");
+        refreshComponentTooltip(fuelRodNaquadriaButton, "FuelRodNaquadria");
+        refreshComponentTooltip(dualFuelRodNaquadriaButton, "DualFuelRodNaquadria");
+        refreshComponentTooltip(quadFuelRodNaquadriaButton, "QuadFuelRodNaquadria");
+        refreshComponentTooltip(fuelRodTiberiumButton, "FuelRodTiberium");
+        refreshComponentTooltip(dualFuelRodTiberiumButton, "DualFuelRodTiberium");
+        refreshComponentTooltip(quadFuelRodTiberiumButton, "QuadFuelRodTiberium");
+        refreshComponentTooltip(fuelRodTheCoreButton, "FuelRodTheCore");
+        refreshComponentTooltip(coolantCellSpace180kButton, "CoolantCell180kSpace");
+        refreshComponentTooltip(coolantCellSpace360kButton, "CoolantCell360kSpace");
+        refreshComponentTooltip(coolantCellSpace540kButton, "CoolantCell540kSpace");
+        refreshComponentTooltip(coolantCellSpace1080kButton, "CoolantCell1080kSpace");
+        refreshComponentTooltip(fuelRodCompressedUraniumButton, "FuelRodCompressedUranium");
+        refreshComponentTooltip(dualFuelRodCompressedUraniumButton, "DualFuelRodCompressedUranium");
+        refreshComponentTooltip(quadFuelRodCompressedUraniumButton, "QuadFuelRodCompressedUranium");
+        refreshComponentTooltip(fuelRodCompressedPlutoniumButton, "FuelRodCompressedPlutonium");
+        refreshComponentTooltip(dualFuelRodCompressedPlutoniumButton, "DualFuelRodCompressedPlutonium");
+        refreshComponentTooltip(quadFuelRodCompressedPlutoniumButton, "QuadFuelRodCompressedPlutonium");
+        refreshComponentTooltip(fuelRodLiquidUraniumButton, "FuelRodLiquidUranium");
+        refreshComponentTooltip(dualFuelRodLiquidUraniumButton, "DualFuelRodLiquidUranium");
+        refreshComponentTooltip(quadFuelRodLiquidUraniumButton, "QuadFuelRodLiquidUranium");
+        refreshComponentTooltip(fuelRodLiquidPlutoniumButton, "FuelRodLiquidPlutonium");
+        refreshComponentTooltip(dualFuelRodLiquidPlutoniumButton, "DualFuelRodLiquidPlutonium");
+        refreshComponentTooltip(quadFuelRodLiquidPlutoniumButton, "QuadFuelRodLiquidPlutonium");
+        refreshComponentTooltip(fuelRodGlowstone, "FuelRodGlowstone");
     }
 
     /**

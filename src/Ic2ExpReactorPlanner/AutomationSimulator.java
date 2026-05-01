@@ -866,4 +866,12 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             }
         }
     }
+
+    public static String formatNumber(double num) {
+        return DECIMAL_FORMAT.format(num);
+    }
+
+    public static String formatNumber(int num) {
+        return DECIMAL_FORMAT.format(num);
+    }
 }
