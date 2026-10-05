@@ -9,8 +9,6 @@ import static Ic2ExpReactorPlanner.BundleHelper.formatI18n;
 import static Ic2ExpReactorPlanner.BundleHelper.getI18n;
 
 import Ic2ExpReactorPlanner.components.ReactorItem;
-import java.awt.HeadlessException;
-import javax.swing.JOptionPane;
 
 /**
  * Represents an IndustrialCraft2 Nuclear Reactor.
@@ -350,16 +348,13 @@ public class Reactor {
                 // Try to handle it as a newer code with the "erp=" prefix stripped
                 readCodeString(code);
             } else if (!code.isEmpty()) {
-                JOptionPane.showMessageDialog(
-                        null,
-                        String.format(getI18n("Warning.InvalidReactorCode"), code),
-                        getI18n("Warning.Title"),
-                        JOptionPane.WARNING_MESSAGE);
+                WarningDisplay.warn(
+                        getI18n("Warning.Title"), String.format(getI18n("Warning.InvalidReactorCode"), code));
             }
         }
     }
 
-    private void handleTaloniusCode(String tempCode) throws HeadlessException {
+    private void handleTaloniusCode(String tempCode) {
         StringBuilder warnings = new StringBuilder(500);
         TaloniusDecoder decoder = new TaloniusDecoder(tempCode);
         // initial heat, in multiples of 100
@@ -498,7 +493,7 @@ public class Reactor {
         }
         if (warnings.length() > 0) {
             warnings.setLength(warnings.length() - 1); // to remove last newline character
-            JOptionPane.showMessageDialog(null, warnings, getI18n("Warning.Title"), JOptionPane.WARNING_MESSAGE);
+            WarningDisplay.warn(getI18n("Warning.Title"), warnings.toString());
         }
     }
 

@@ -19,16 +19,16 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4     |
 | P2 — performance                             | 2     |
-| P3 — dead code, correctness-adjacent cleanup | 17 (1 fixed) |
+| P3 — dead code, correctness-adjacent cleanup | 17 (2 fixed) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **474** |
+| **Covered by an automated regression test**  | **483** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
 is leak-free). The genuinely dangerous problems are two wrong-heat-transfer formulas in
 `Exchanger`/`Condensator`, and unvalidated legacy-code parsing that can crash the GUI.
 
-**A 474-test regression suite and a 304-design simulation corpus now exist** so that the fixes
+**A 483-test regression suite and a 304-design simulation corpus now exist** so that the fixes
 above can be made safely; see [Testing](#testing) at the end. Building them also surfaced six
 further findings, marked **🆕** below, and escalated P0-2 from a rounding error into a
 silently-wrong safety verdict.
@@ -478,12 +478,16 @@ check, and `add(Object...)` throws `NullPointerException` on a null element. Add
 component without a recipe entry crashes the GUI; a null guard turns it into a missing
 ingredient.
 
-### P3-10 🔍 `handleTaloniusCode` throws `HeadlessException` out of `setCode`
+### P3-10 ✅ FIXED 🔍 `handleTaloniusCode` threw `HeadlessException` out of `setCode`
 
-`Reactor.handleTaloniusCode` declares `throws HeadlessException` (via `JOptionPane`) and
-`setCode` neither declares nor catches it. Harmless in the GUI; it makes the class
-unusable headless, which blocks any future headless/CI regression testing — worth fixing
-*before* you add the tests P0-1/P0-2 need.
+`Reactor.handleTaloniusCode` declared `throws HeadlessException` (via `JOptionPane`) and
+`setCode` neither declared nor caught it. Harmless in the GUI, but it made the class unusable
+headless, which blocked headless regression testing.
+
+**Fixed** by routing both of `setCode`'s warnings through a new `WarningDisplay` seam and dropping
+the declaration. The Talonius test in `ReactorCodeSerializationTest` no longer needs reflection,
+and `WarningDisplayTest` covers the sink itself — including that `setSink(null)` restores the
+dialog, so a failing test cannot leave warnings silently discarded for the rest of the JVM.
 
 ### P3-11 🔍 Non-volatile global mutable config read across threads
 
@@ -632,7 +636,7 @@ design as safe".
 
 ## Testing
 
-A 474-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 483-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 

@@ -14,6 +14,8 @@ import Ic2ExpReactorPlanner.components.CoolantCell;
 import Ic2ExpReactorPlanner.components.FuelRod;
 import Ic2ExpReactorPlanner.components.Plating;
 import Ic2ExpReactorPlanner.components.ReactorItem;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -385,29 +387,34 @@ class ReactorCodeSerializationTest {
          */
         @Test
         @DisplayName("a synthetic Talonius code places components")
-        void syntheticCode() throws Throwable {
+        void syntheticCode() {
             java.math.BigInteger value = java.math.BigInteger.ONE.shiftLeft(10 + 7 * 53);
             String code = value.toString(36);
 
-            java.lang.reflect.Method handle =
-                    Reactor.class.getDeclaredMethod("handleTaloniusCode", String.class);
-            handle.setAccessible(true);
-
-            Reactor reactor = new Reactor();
-            try {
-                handle.invoke(reactor, code);
-            } catch (java.lang.reflect.InvocationTargetException e) {
-                // In a headless JVM the warning JOptionPane throws; the grid work has already
-                // happened by then, which is all this test needs.
-                if (!(e.getCause() instanceof java.awt.HeadlessException)) {
-                    throw e.getCause();
+            // No reflection and no display: P3-10 replaced the direct JOptionPane call in
+            // handleTaloniusCode with WarningDisplay, so the warning sink absorbs it.
+            final List<String> warnings = new ArrayList<>();
+            WarningDisplay.setSink(new WarningDisplay.Sink() {
+                @Override
+                public void warn(String title, String message) {
+                    warnings.add(message);
                 }
+            });
+            try {
+                Reactor reactor = new Reactor();
+                reactor.setCode(code);
+                assertTrue(warnings.isEmpty(), "a fully recognised code warns nothing, got: " + warnings);
+                assertClose(
+                        0,
+                        reactor.getCurrentHeat(),
+                        1e-9,
+                        "initial heat is read in multiples of 100, so 0 here");
+                assertNotNull(reactor.getComponentAt(0, 0), "the last field read lands at row 0, column 0");
+                assertEquals("fuelRodUranium", reactor.getComponentAt(0, 0).baseName, "a uranium rod");
+                assertEquals(1, TestSupport.componentsOf(reactor).size(), "and nothing else was placed");
+            } finally {
+                WarningDisplay.setSink(null);
             }
-            assertClose(
-                    0, reactor.getCurrentHeat(), 1e-9, "initial heat is read in multiples of 100, so 0 here");
-            assertNotNull(reactor.getComponentAt(0, 0), "the last field read lands at row 0, column 0");
-            assertEquals("fuelRodUranium", reactor.getComponentAt(0, 0).baseName, "a uranium rod");
-            assertEquals(1, TestSupport.componentsOf(reactor).size(), "and nothing else was placed");
         }
     }
 
