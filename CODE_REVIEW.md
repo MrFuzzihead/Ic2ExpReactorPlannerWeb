@@ -19,9 +19,9 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (3 fixed) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (4 fixed) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **495** |
+| **Covered by an automated regression test**  | **496** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -35,7 +35,7 @@ silently-wrong safety verdict.
 
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
-performance sweep and P3-3 the `getOldCode()` default — **all fixed and verified**. Both P0s are closed,
+performance sweep, P3-3 the `getOldCode()` default and P3-1 the `needsCooldown` report — **all fixed and verified**. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -608,7 +608,7 @@ noise, not as a win.
 
 ## P3 — Dead code and correctness-adjacent cleanup
 
-### P3-1 ✅ `needsCooldown` is never set to `true` — the feature is dead
+### P3-1 ✅ FIXED — `needsCooldown` is never set to `true` — the feature is dead
 
 ```
 '= true' assignments: 0 | other references: 2
@@ -618,6 +618,38 @@ noise, not as a win.
 only *clear* it. The per-component `ComponentInfo.CooldownTime` report can therefore never
 appear. Either populate it when a component still holds heat at the end of the main loop, or
 delete the field.
+
+#### ✅ Applied and verified
+
+**Populated, not deleted.** The loop that already decides which components to colour orange
+(`AutomationSimulator.java:411`) is the one that says "this component still held heat when the
+run stopped" — the same condition that appends `ComponentInfo.RemainingHeat` — so the flag is
+set there, one line, no extra pass. Deleting the field instead would have orphaned two bundle
+strings (`ComponentInfo.CooldownTime` in `Bundle.properties:126` and `Bundle_zh_CN.properties`)
+and removed a user-facing tooltip line, so the feature is kept.
+
+The report is *not* unconditional: a component only gets the line when its heat actually reaches
+`0.0` while the reactor is still venting. That is what makes the test worth having, and it took
+experimentation to find a design that reaches it — a `heatVent` still holding 18 of its 1 000
+heat with the reactor warm enough for it to drink:
+
+| design (automated, cap 200 001) | cooldown loop | per-component line |
+|---|---|---|
+| quad U rod + 3 × `coolantCell10k` + `heatVent` | 3 ticks, exits on vented heat | vent: `Took 3 seconds to cool down.` |
+| quad U rod + 4 × `coolantCell10k` | 1 tick (`vented = 0`) | none — cells never empty |
+| single U rod + 4 × `coolantCell60k` (manual) | 1 tick (`vented = 0`) | none — 20 000 heat stays |
+
+`AutomationSimulatorTest.Cooling.componentCooldownTimeIsReported` pins both halves: the vent's
+info must contain `formatI18n("ComponentInfo.CooldownTime", 3)` **and** the `RemainingHeat` line,
+while a coolant cell that keeps 3 024 heat must contain the `RemainingHeat` line and **not** the
+cooldown line.
+
+| mutation | result |
+|---|---|
+| revert the assignment (as shipped) | **1 failed** — exactly the new test |
+
+Clean isolation, unlike P3-3: the flag is the only thing that test reads. Corpus baseline
+unmoved — `CorpusRunner` records numeric metrics only, and this change touches no number.
 
 ### P3-2 ✅ Stale `lastEUoutput` folded into min/max in the cooldown loop
 
@@ -859,7 +891,8 @@ design as safe".
 6. ~~**P1-4** decide the heat-unit divisor~~ — **skipped**; re-evaluated as a false positive on the
    arithmetic, leaving only the `HU/t` / `EU/t` bundle label to check against upstream.
 7. ~~**P2-3** minor sweep~~ — **done and verified**; see above. (c) and (e) retracted as false positives.
-8. **P3 sweep** — delete the dead `GGFuelRod` fields and `needsCooldown`, fix the
+8. **P3 sweep** — ~~`needsCooldown`~~ is **done** (P3-1: populated, not deleted, and pinned by a
+test); delete the dead `GGFuelRod` fields, fix the
    stale `lastEUoutput`, narrow `catch (Throwable)`, tidy `plannerResized`, and add
    the `parent` null guard in `Vent.getVentCoolingCapacity()`.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by

@@ -408,6 +408,7 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                                 publish(String.format("R%dC%d:0xFFA500", row, col)); // NOI18N
                                 component.info.append(
                                         formatI18n("ComponentInfo.RemainingHeat", component.getCurrentHeat()));
+                                needsCooldown[row][col] = true;
                             }
                         }
                     }

@@ -365,6 +365,40 @@ class AutomationSimulatorTest {
                     report.contains(BundleHelper.getI18n("Simulation.ElapsedTime").split("%")[0]),
                     "the run reports its elapsed time: " + report);
         }
+
+        @Test
+        @DisplayName("a component that still holds heat when the run stops reports its own cooldown time")
+        void componentCooldownTimeIsReported() throws Exception {
+            // The vent keeps 18 of its 1 000 heat when the tick cap stops the run, and the reactor
+            // still has heat for it to drink, so its cooldown phase runs: 3 ticks later it is empty
+            // and it gets the per-component cooldown line. The coolant cells keep 3 024 heat and
+            // never empty, so they must not get that line.
+            Reactor simReactor = new Reactor();
+            place(simReactor, 2, 4, "quadFuelRodUranium");
+            place(simReactor, 1, 4, "coolantCell10k");
+            place(simReactor, 3, 4, "coolantCell10k");
+            place(simReactor, 2, 3, "coolantCell10k");
+            place(simReactor, 2, 5, "heatVent");
+            simReactor.setAutomated(true);
+            simReactor.setMaxSimulationTicks(200_001);
+            JTextArea output = new JTextArea(5, 20);
+            AutomationSimulator simulator =
+                    new AutomationSimulator(simReactor, output, newJPanelGrid(), null, -1);
+            simulator.execute();
+            simulator.get();
+
+            String remainingHeat = BundleHelper.getI18n("ComponentInfo.RemainingHeat").split("%")[0];
+            String cooldownTime = BundleHelper.getI18n("ComponentInfo.CooldownTime").split("%")[0];
+            String vent = simReactor.getComponentAt(2, 5).info.toString();
+            assertTrue(vent.contains(remainingHeat), "the vent is told it held heat: " + vent);
+            assertTrue(vent.contains(BundleHelper.formatI18n("ComponentInfo.CooldownTime", 3)),
+                    "and how long that heat took to clear: " + vent);
+
+            String cell = simReactor.getComponentAt(1, 4).info.toString();
+            assertTrue(cell.contains(remainingHeat), "the cell is told it held heat: " + cell);
+            assertFalse(cell.contains(cooldownTime),
+                    "a cell whose heat never cleared reports no cooldown time: " + cell);
+        }
     }
 
     // ================================================================== modes
