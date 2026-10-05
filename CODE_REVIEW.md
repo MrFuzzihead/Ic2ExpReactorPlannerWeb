@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 17 (2 fixed) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (3 fixed) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **495** |
 
@@ -34,8 +34,9 @@ further findings, marked **🆕** below, and escalated P0-2 from a rounding erro
 silently-wrong safety verdict.
 
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
-`AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot and P2-3 the minor
-performance sweep — **all fixed and verified**. Both P0s are closed, and no test in the suite is skipped.
+`AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
+performance sweep and P3-3 the `getOldCode()` default — **all fixed and verified**. Both P0s are closed,
+and no test in the suite is skipped.
 
 ---
 
@@ -624,11 +625,33 @@ delete the field.
 the cooldown loop, yet `minEUoutput`/`maxEUoutput` are updated from it there. Idempotent, so
 harmless today, but it is copy-paste from the wrong loop.
 
-### P3-3 ✅ `getOldCode()` compares `resumeTemp` against `DEFAULT_SUSPEND_TEMP`
+### P3-3 ✅ FIXED — `getOldCode()` compares `resumeTemp` against `DEFAULT_SUSPEND_TEMP`
 
 `Reactor.java` — `DEFAULT_RESUME_TEMP` and `DEFAULT_SUSPEND_TEMP` are both `120e3` today, so
 there is no behavioral difference (verified: `resumeTemp=60000` does emit `|r1aao`). Pure
 latent bug; fix while you are in the file.
+
+#### ✅ Applied and verified
+
+`Reactor.java:839` now reads `resumeTemp != DEFAULT_RESUME_TEMP`. One-line change, no behaviour
+change today — which is exactly the point, and it is stated rather than hidden:
+
+| mutation | result |
+|---|---|
+| fix reverted, constants left equal | **0 failed** — the two constants are the same number, so no value can tell the spellings apart |
+| `DEFAULT_RESUME_TEMP` moved to `130e3`, fix **reverted** | 18 failed |
+| `DEFAULT_RESUME_TEMP` moved to `130e3`, fix **applied** | 17 failed |
+
+The `comm` of those two failure lists is a single line: `legacy hex codes (getOldCode) > the
+resume temp is suppressed against its own default`. So the constant bump is not a clean isolation
+— it breaks 17 tests that hardcode `120000` as the resume default — but exactly one of them is
+discriminating, and it is the assertion written for this fix. The guard is therefore correct and
+inert until someone changes one of the two constants.
+
+**Related, not fixed here:** `Reactor.java:728-729` store the same pair through
+`storage.store(resumeTemp, (int) 120e3)` with a **literal** rather than the constant, so the
+binary code path carries the same latent coupling a third time. Worth a follow-up so the three
+sites read one constant.
 
 ### P3-4 ✅ `catch (Throwable e)` in `doInBackground`
 
@@ -837,9 +860,10 @@ design as safe".
    arithmetic, leaving only the `HU/t` / `EU/t` bundle label to check against upstream.
 7. ~~**P2-3** minor sweep~~ — **done and verified**; see above. (c) and (e) retracted as false positives.
 8. **P3 sweep** — delete the dead `GGFuelRod` fields and `needsCooldown`, fix the
-   `DEFAULT_RESUME_TEMP` comparison and the stale `lastEUoutput`, narrow `catch (Throwable)`,
-   precompile the `process()` regex, hoist the CSV bundle keys, tidy `plannerResized`, and add
+   stale `lastEUoutput`, narrow `catch (Throwable)`, tidy `plannerResized`, and add
    the `parent` null guard in `Vent.getVentCoolingCapacity()`.
+9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
+   an assertion that only bites once the two constants diverge.
 
 ## Testing
 

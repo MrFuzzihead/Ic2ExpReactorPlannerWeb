@@ -341,16 +341,27 @@ class ReactorCodeSerializationTest {
         }
 
         @Test
-        @DisplayName("a non-default resume temperature is emitted as its own suffix field")
+        @DisplayName("the resume temp is suppressed against its own default")
         void resumeTempSuffix() {
-            // getOldCode compares resumeTemp against DEFAULT_SUSPEND_TEMP rather than
-            // DEFAULT_RESUME_TEMP (CODE_REVIEW.md P3-3). The two constants are both 120e3 today
-            // so it happens to work; this test passes today and would catch a divergence.
+            // P3-3: getOldCode used to compare resumeTemp against DEFAULT_SUSPEND_TEMP. Both
+            // constants are 120e3 today, so the two spellings agree and no value can tell them
+            // apart - the assertions below are the guard for the moment they diverge.
+            final int defaultResume = new Reactor().getResumeTemp();
+
             Reactor reactor = new Reactor();
             reactor.setPulsed(true);
-            reactor.setResumeTemp(60000);
+            reactor.setResumeTemp(defaultResume - 60000);
             String old = reactor.getOldCode();
-            assertTrue(old.contains("|r"), "resume temp field emitted: " + old);
+            assertTrue(old.contains("|r"), "a non-default resume temp is emitted: " + old);
+
+            Reactor back = new Reactor();
+            back.setCode(old);
+            assertEquals(defaultResume - 60000, back.getResumeTemp(), "and survives the round trip");
+
+            Reactor atDefault = new Reactor();
+            atDefault.setPulsed(true);
+            atDefault.setResumeTemp(defaultResume);
+            assertFalse(atDefault.getOldCode().contains("|r"), "the default is not written");
         }
     }
 

@@ -836,7 +836,7 @@ public class Reactor {
         if (pulsed && suspendTemp != DEFAULT_SUSPEND_TEMP) {
             result.append(String.format("|s%s", Integer.toString(suspendTemp, 36)));
         }
-        if (pulsed && resumeTemp != DEFAULT_SUSPEND_TEMP) {
+        if (pulsed && resumeTemp != DEFAULT_RESUME_TEMP) {
             result.append(String.format("|r%s", Integer.toString(resumeTemp, 36)));
         }
         return result.toString();
