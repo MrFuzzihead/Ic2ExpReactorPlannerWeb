@@ -2425,7 +2425,6 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             MaterialsList.setGTVersion("5.08");
             FuelRod.setGT509Behavior(false);
             FuelRod.setGTNHBehavior(false);
-            GGFuelRod.setGTNHBehavior(false);
         } else if ("5.09".equals(gtVersion)) {
             iridiumNeutronReflectorButton.setEnabled(true);
             fuelRodThoriumButton.setEnabled(true);
@@ -2482,7 +2481,6 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             MaterialsList.setGTVersion("5.09");
             FuelRod.setGT509Behavior(true);
             FuelRod.setGTNHBehavior(false);
-            GGFuelRod.setGTNHBehavior(false);
         } else if ("GTNH".equals(gtVersion)) {
             iridiumNeutronReflectorButton.setEnabled(true);
             fuelRodThoriumButton.setEnabled(true);
@@ -2539,7 +2537,6 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             MaterialsList.setGTVersion("GTNH");
             FuelRod.setGT509Behavior(false);
             FuelRod.setGTNHBehavior(true);
-            GGFuelRod.setGTNHBehavior(true);
         } else {
             iridiumNeutronReflectorButton.setEnabled(!"1.7.10".equals(mcVersion));
             fuelRodThoriumButton.setEnabled(false);
@@ -2596,7 +2593,6 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             MaterialsList.setGTVersion("none");
             FuelRod.setGT509Behavior(false);
             FuelRod.setGTNHBehavior(false);
-            GGFuelRod.setGTNHBehavior(false);
         }
         materialsArea.setText(reactor.getMaterials().toString());
         refreshAllComponentTooltips();

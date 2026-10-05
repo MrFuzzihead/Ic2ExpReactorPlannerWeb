@@ -51,7 +51,6 @@ public final class TestSupport {
     public static void resetGlobalConfig() {
         FuelRodBridge.setGT509(false);
         FuelRodBridge.setGTNH(false);
-        GGFuelRodBridge.setGTNH(false);
         ReflectorBridge.setMcVersion("1.12.2");
         MaterialsList.setUseUfcForCoolantCells(false);
         MaterialsList.setExpandAdvancedAlloy(false);
@@ -72,14 +71,6 @@ public final class TestSupport {
 
         static void setGTNH(boolean value) {
             Ic2ExpReactorPlanner.components.FuelRod.setGTNHBehavior(value);
-        }
-    }
-
-    public static final class GGFuelRodBridge {
-        private GGFuelRodBridge() {}
-
-        static void setGTNH(boolean value) {
-            Ic2ExpReactorPlanner.components.GGFuelRod.setGTNHBehavior(value);
         }
     }
 

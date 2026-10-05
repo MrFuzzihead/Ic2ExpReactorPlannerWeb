@@ -559,7 +559,11 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             //                publish(formatI18n("Simulation.ExcessHeating", maxGeneratedHeat - totalCooling));
             //            }
             // return null;
-        } catch (Throwable e) {
+        } catch (Exception e) {
+            // P3-4: narrowed from Throwable. A JVM Error (OutOfMemoryError, StackOverflowError)
+            // is not a simulation failure the user can act on, and dumping its stack trace into
+            // the report area read as a plausible result. Errors now leave doInBackground; SwingWorker
+            // captures them in its FutureTask, so they surface at get() rather than in the report.
             if (cooldownTicks == 0) {
                 publish(formatI18n("Simulation.ErrorReactor", reactorTicks));
             } else {

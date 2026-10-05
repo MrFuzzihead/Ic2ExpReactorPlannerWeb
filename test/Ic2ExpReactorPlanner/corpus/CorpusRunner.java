@@ -211,7 +211,6 @@ public final class CorpusRunner {
     public static Result run(Corpus.Design design) throws Exception {
         FuelRod.setGT509Behavior(design.gt509);
         FuelRod.setGTNHBehavior(design.gtnh);
-        GGFuelRod.setGTNHBehavior(design.gtnh);
         try {
             // The simulator mutates component heat and damage, so hand it a private copy.
             Reactor simReactor = new Reactor();
@@ -246,7 +245,6 @@ public final class CorpusRunner {
         } finally {
             FuelRod.setGT509Behavior(false);
             FuelRod.setGTNHBehavior(false);
-            GGFuelRod.setGTNHBehavior(false);
         }
     }
 
@@ -259,7 +257,6 @@ public final class CorpusRunner {
     public static Reactor simulateToCompletion(Corpus.Design design) throws Exception {
         FuelRod.setGT509Behavior(design.gt509);
         FuelRod.setGTNHBehavior(design.gtnh);
-        GGFuelRod.setGTNHBehavior(design.gtnh);
         try {
             Reactor simReactor = new Reactor();
             simReactor.setCode(design.reactor.getCode());
@@ -290,7 +287,6 @@ public final class CorpusRunner {
         } finally {
             FuelRod.setGT509Behavior(false);
             FuelRod.setGTNHBehavior(false);
-            GGFuelRod.setGTNHBehavior(false);
         }
     }
 

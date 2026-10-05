@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (4 fixed) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (6 fixed) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **496** |
 
@@ -35,7 +35,8 @@ silently-wrong safety verdict.
 
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
-performance sweep, P3-3 the `getOldCode()` default and P3-1 the `needsCooldown` report — **all fixed and verified**. Both P0s are closed,
+performance sweep, P3-3 the `getOldCode()` default, P3-1 the `needsCooldown` report, P3-5 the
+`GGFuelRod` dead members and P3-4 the `doInBackground` catch — **all fixed and verified**. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -685,14 +686,43 @@ inert until someone changes one of the two constants.
 binary code path carries the same latent coupling a third time. Worth a follow-up so the three
 sites read one constant.
 
-### P3-4 ✅ `catch (Throwable e)` in `doInBackground`
+### P3-4 ✅ FIXED — `catch (Throwable e)` in `doInBackground`
 
 `AutomationSimulator.java` — swallows `OutOfMemoryError`/`StackOverflowError` and dumps the
 stack trace into the user-facing `JTextArea`. Narrow to `Exception` (or
 `RuntimeException`) and let `Error` propagate; the default uncaught-exception handler already
 installed in `main()` will surface it properly.
 
-### P3-5 ✅ `GGFuelRod` carries three dead fields that shadow live `FuelRod` state
+#### ✅ Applied and verified
+
+`AutomationSimulator.java:562` now reads `catch (Exception e)`, with a comment saying *why*
+— a JVM `Error` is not a simulation failure the user can act on, and its stack trace printed
+in the report area read as a plausible result.
+
+**The review's last sentence does not hold for this SwingWorker variant, and the fix is shipped
+with that correction rather than on top of the claim.** `javax.swing.SwingWorker` here is an
+`java.util.concurrent.RunnableFuture`, and `run()` delegates to `FutureTask.run()`, which captures
+*any* `Throwable`. Verified with a throwaway `SwingWorker` whose `doInBackground` recursed until
+`StackOverflowError`:
+
+| observation | result |
+|---|---|
+| `get()` after the run | throws `java.util.concurrent.ExecutionException` (this variant has no `ExecutionError` class) |
+| `ReactorPlannerFrame` | never calls `get()` — it uses `execute()` + a property listener, so a propagated `Error` is now **silent** in the GUI |
+
+So the narrowing removes a misleading report; it does not add a visible one. That is the honest
+net effect, and the residual is recorded under [Gaps worth closing](#gaps-worth-closing).
+
+| mutation | result |
+|---|---|
+| revert to `catch (Throwable e)` | **0 failed** — not test-observable |
+
+No test can reach the catch: nothing in the suite or the 304-design corpus throws inside
+`doInBackground`, and there is no seam to inject an `Error` (the only `catch` inside the `try`
+is the inner `IOException` one at `:140`, for the CSV header). Same "not test-observable" status
+as the P1-2 `volatile` fixes, which the suite already documents as a gap.
+
+### P3-5 ✅ FIXED — `GGFuelRod` carries three dead members that shadow live `FuelRod` state
 
 ```
 GGFuelRod.energyMult   : 0 apparent reads outside declaration/copy
@@ -705,6 +735,32 @@ GGFuelRod.GTNHbehavior : declared at :11, assigned at :14 — never read
 dead; `getRodCount()`/`getEnergy()` resolve to `FuelRod`'s. `GGFuelRod.setGTNHBehavior()`
 being called from `gtVersionComboActionPerformed` is misleading — remove all three plus the
 setter call.
+
+#### ✅ Applied and verified
+
+All three members deleted, along with the writes that kept them alive-looking:
+
+| site | change |
+|---|---|
+| `GGFuelRod.java` fields | `rodCount`, `energyMult`, `GTNHbehavior` gone; `heatBonus` kept — it *is* live, via `getHeatBonus()` |
+| `GGFuelRod(int id, …)` | the two shadowing assignments gone; the parameters stay, they feed `super(…)` |
+| `GGFuelRod(GGFuelRod other)` | the two shadowing copies gone; `super(other)` already carries the live values through `FuelRod`'s own copy constructor |
+| `setGTNHBehavior` | deleted — it wrote to a field nothing reads, and `FuelRod.setGTNHBehavior` is the live switch |
+| `ReactorPlannerFrame.java` ×4 | the `GGFuelRod.setGTNHBehavior(…)` lines removed; each was paired on the next line with the live `FuelRod.setGTNHBehavior(…)` |
+| `CorpusRunner.java` ×4 | same pairing, same removal — so no corpus design's GTNH behaviour changes |
+| `TestSupport.java` | `GGFuelRodBridge` and its `resetGlobalConfig()` call removed |
+
+The copy constructor is not a curiosity here: `ComponentFactory.copy(ReactorItem)` dispatches
+`new GGFuelRod((GGFuelRod) source)` for every `createComponent(name)` lookup, so that
+constructor runs on every component the app or a test creates — which is exactly why deleting
+`this.heatBonus = other.heatBonus` would be a real bug.
+
+| mutation | result |
+|---|---|
+| re-add all three dead members with their writes | **0 failed** — they were dead, so removal is behaviour-preserving |
+| `this.heatBonus = other.heatBonus` → `= 0` in the copy ctor | **6 failed** — 5 `PassiveComponentsTest.GGFuelRods` cases *and* `CorpusBaselineTest` |
+
+Corpus baseline unmoved: the removed writes targeted members no expression ever read.
 
 ### P3-6 🔍 `CoolantCell` counts negative heat — cosmetic only
 
@@ -891,9 +947,9 @@ design as safe".
 6. ~~**P1-4** decide the heat-unit divisor~~ — **skipped**; re-evaluated as a false positive on the
    arithmetic, leaving only the `HU/t` / `EU/t` bundle label to check against upstream.
 7. ~~**P2-3** minor sweep~~ — **done and verified**; see above. (c) and (e) retracted as false positives.
-8. **P3 sweep** — ~~`needsCooldown`~~ is **done** (P3-1: populated, not deleted, and pinned by a
-test); delete the dead `GGFuelRod` fields, fix the
-   stale `lastEUoutput`, narrow `catch (Throwable)`, tidy `plannerResized`, and add
+8. **P3 sweep** — ~~`needsCooldown`~~ (P3-1), ~~the dead `GGFuelRod` members~~ (P3-5) and
+   ~~`catch (Throwable)`~~ (P3-4) are **done**; fix the
+   stale `lastEUoutput`, tidy `plannerResized`, and add
    the `parent` null guard in `Vent.getVentCoolingCapacity()`.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge.
@@ -1125,5 +1181,10 @@ fails. Two practical warnings, both learned the hard way:
 * **`volatile` fixes are not test-observable.** P1-2 landed with no test that can fail against it;
   the mutation table records that as *not caught*. A real guard would need a thread-sanitizer-style
   harness or a deliberately slow interleaving, neither of which JUnit here provides.
+* **P3-4's narrowing has no visible replacement.** With `catch (Exception e)`, a JVM `Error`
+  leaves `doInBackground` and is captured by `FutureTask.run()`; it would rethrow as
+  `java.util.concurrent.ExecutionException` at `get()`, which `ReactorPlannerFrame` never calls,
+  so the GUI now shows a report that simply stops. A guard would need the frame to call `get()`
+  (or install a listener) and render that exception.
 * **`TextureFactory` is only covered** by the fact that every component has a non-null image.
   The texture-pack fallback-name asymmetry in P3-8 needs a real pack to exercise.
