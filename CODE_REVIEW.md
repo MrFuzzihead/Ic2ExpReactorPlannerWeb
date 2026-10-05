@@ -1,0 +1,618 @@
+# Code Review — Ic2ExpReactorPlanner
+
+Second-pass review of the whole codebase (24 files, ~8.3k lines, Java 8 Swing desktop app).
+Every finding below was **empirically verified** by compiling the sources and running
+throwaway harnesses against the real classes (values, exceptions, allocations and timings
+are measured, not inferred). Scratch harnesses were removed after use; nothing in `src/`
+was modified.
+
+**Legend** — ✅ reproduced with a failing/explicit observation · 🔍 confirmed by static
+analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise) ·
+✔️ *checked and cleared* (looked like a bug, is not).
+
+---
+
+## 0. Summary
+
+|                                              | Count |
+|----------------------------------------------|-------|
+| P0 — wrong simulation results                | 2     |
+| P1 — crashes / data races                    | 4     |
+| P2 — performance                             | 2     |
+| P3 — dead code, correctness-adjacent cleanup | 18    |
+| Retracted / corrected from the first pass    | 5     |
+| **Covered by an automated regression test**  | **453** |
+
+**Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
+the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
+is leak-free). The genuinely dangerous problems are two wrong-heat-transfer formulas in
+`Exchanger`/`Condensator`, and unvalidated legacy-code parsing that can crash the GUI.
+
+**A 453-test regression suite now exists** so that the fixes above can be made safely; see
+[Testing](#testing) at the end. Writing it also surfaced six further findings, marked
+**🆕** below.
+
+---
+
+## P0 — Simulation produces wrong results
+
+### P0-1 ✅⚠️ `Exchanger.transfer()` — reactor-side heat cascade uses the wrong field
+
+**File:** `src/Ic2ExpReactorPlanner/components/Exchanger.java:100-116`
+
+```java
+if (switchReactor > 0) {
+    ...
+    if (add > switchReactor) { add = switchReactor; }   // correct
+    if (Reactormed + mymed / 2.0 < 1.0)  { add = switchSide / 2; }   // WRONG FIELD
+    if (Reactormed + mymed / 2.0 < 0.75) { add = switchSide / 4; }   // WRONG FIELD
+    if (Reactormed + mymed / 2.0 < 0.5)  { add = switchSide / 8; }   // WRONG FIELD
+    if (Reactormed + mymed / 2.0 < 0.25) { add = 1; }                // literal, fine
+```
+
+The five `if`s cascade (each overwrites the previous), so the **last** matching tier wins.
+For `0.25 <= Reactormed + mymed/2 < 1.0` the value is derived from `switchSide`, which for
+the reactor block is by definition the *wrong* constant.
+
+**⚠️ Correction:** the first pass claimed only `coreHeatExchanger` was affected. It is
+**three of the four** exchangers, and it errs in *both* directions. Measured:
+
+| component                | side/reactor | `sum < 1.0`                                        | `< 0.75`   | `< 0.5`   | `< 0.25` |
+|--------------------------|--------------|----------------------------------------------------|------------|-----------|----------|
+| `heatExchanger`          | 12/4         | code 6 / **should be 2**                           | 3 / **1**  | 1 / **0** | 1 / 1 ✔ |
+| `advancedHeatExchanger`  | 24/8         | code 12 / **should be 4**                          | 6 / **2**  | 3 / **1** | 1 / 1 ✔ |
+| `coreHeatExchanger`      | 0/72         | code 0 / **should be 36**                          | 0 / **18** | 0 / **9** | 1 / 1 ✔ |
+| `componentHeatExchanger` | 36/0         | reactor block never entered (`switchReactor == 0`) |            |           |          |
+
+So `coreHeatExchanger` **transfers no reactor heat at all** when the reactor/exchanger are
+cold, while `heatExchanger` and `advancedHeatExchanger` **over-transfer**.
+
+**Live reproduction** (`coreHeatExchanger`, `Reactormed + mymed/2 = 0.300`):
+
+```
+maxHeat(exchanger)=5000  mymed=0.60  Reactormed=0.00  sum=0.300
+tier <0.5 fires -> code add = switchSide/8 = 0/8 = 0
+code moved 0 heat into reactor; correct (switchReactor/8 = 9) would move 9
+```
+
+**Fix:** replace the four `switchSide` references in the `switchReactor > 0` block with
+`switchReactor`. The side block (`switchSide > 0`) is already correct.
+
+---
+
+### P0-2 ✅⚠️ `Condensator.adjustCurrentHeat()` — absorption bound uses the wrong term, and can drive heat **negative**
+
+**File:** `src/Ic2ExpReactorPlanner/components/Condensator.java:40`
+
+```java
+double acceptedHeat = Math.min(heat, getMaxHeat() - heat);   // should be getMaxHeat() - currentHeat
+```
+
+**⚠️ Correction:** the first pass described this as "under-absorption". The real consequence
+is worse and more specific. `Math.min(heat, maxHeat - heat)` goes **negative** once a
+single heat packet exceeds the condensator's own capacity, so `currentHeat` is driven
+below zero.
+
+**Measured** (`currentHeat == 0`, fresh condensator):
+
+| packet       | `rshCondensator` (max 20 000)           | `lzhCondensator` (max 100 000)           |
+|--------------|-----------------------------------------|------------------------------------------|
+| 0.5 × max    | `currentHeat = 10 000` ✔               | `currentHeat = 50 000` ✔                |
+| 1.0 × max    | `currentHeat = 0` ✘ (should be 20 000) | `currentHeat = 0` ✘ (should be 100 000) |
+| 1.4784 × max | **`currentHeat = -9 568`** ✘           | **`currentHeat = -47 840`** ✘           |
+
+**Reachability:** I exhaustively evaluated `generateHeat()` for every fuel rod across all
+neighbor counts × fluid/mox × GT5.09 × GTNH modes. **Maximum single-packet heat = 29 568**
+(`fuelRodTheCore`). Because `FuelRod.handleHeat()` divides by the number of heatable
+neighbors, a condensator that is the *only* heatable neighbor receives the full packet
+(`handleGTHeat` likewise round-trips to the full `heat`).
+
+* `rshCondensator` (half-capacity 10 000): 29 568 > 10 000 → **reachable, heat goes negative.**
+* `lzhCondensator` (half-capacity 50 000): 29 568 < 50 000 → **not reachable**; LZH is
+  completely unaffected and needs no fix validation.
+
+**Impact of negative heat:** `currentHeat` becomes negative, `isHeatAcceptor()` still
+returns true, and `needsCoolantInjected()` (`currentHeat > 0.85 * maxHeat`) is skewed. A
+corrupted condensator then skews every downstream temperature and vented-HU figure.
+
+**Fix:** `double acceptedHeat = Math.min(heat, getMaxHeat() - currentHeat);`
+⚠️ This bug is inherited verbatim from upstream `MauveCloud/Ic2ExpReactorPlanner`, so codes
+may have been *tuned around* the wrong behavior. Add golden-value regression tests before
+changing it, and expect existing published codes' numbers to shift.
+
+---
+
+## P1 — Crashes and data races
+
+### P1-1 ✅ Legacy hex-code parsing has no bounds validation (3 reproduced crash paths)
+
+**File:** `src/Ic2ExpReactorPlanner/Reactor.java:225-300`
+
+`setCode()` only catches `NumberFormatException`, but three other failure modes escape:
+
+1. **More than 3 parameters per cell** → `paramNum` indexes `paramTypes[row][col][3]`
+   with no check against `MAX_PARAM_TYPES`.
+   Reproduced: `01(h1,a2,p3,h4)…|fes` → `ArrayIndexOutOfBoundsException`.
+2. **Short `|xxx` suffix** → `extraCode.charAt(1)` / `charAt(2)` read unconditionally.
+   Reproduced: `00…00|f` → `StringIndexOutOfBoundsException`.
+3. **Unclamped `currentHeat` exceeding the 120 000 storage bound** →
+   `Integer.parseInt(extraCode.substring(3), 36)` has no upper clamp, so
+   `buildCodeString()`'s `storage.store((int) currentHeat, (int) 120e3)` throws on the very
+   next `updateCodeField()`.
+   Reproduced: `00…00|fes3W0E` → `currentHeat = 181 454` → `getCode()` throws
+   `IllegalArgumentException` from `BigintStorage.store`.
+
+**Note on scope:** the heat-spinner maximum is `reactor.getMaxHeat() - 1`, and I measured
+the UI-reachable ceiling at **101 799** (all 54 cells = `heatCapacityReactorPlating`:
+10 000 + 54 × 1 700), so the spinner alone cannot trigger path 3. It is reachable only via
+a pasted legacy code — which is precisely the user action that triggers it.
+
+**Fix:** validate `paramNum < MAX_PARAM_TYPES`, check `extraCode.length()` before each
+`charAt`, clamp parsed `currentHeat` to `[0, 120000)`, and widen the `catch` to `Exception`
+so a bad paste degrades to the existing warning dialog instead of the global uncaught
+exception handler.
+
+### P1-2 ✅ `AutomationSimulator.completed` is a non-volatile cross-thread flag
+
+**File:** `src/Ic2ExpReactorPlanner/AutomationSimulator.java:92`
+
+```
+declared as: private
+volatile = false
+```
+
+`completed` is written on the SwingWorker thread and read on the EDT via `getData()` from
+arbitrary UI events (`ReactorPlannerFrame.java:1962, 2654-2656`). There is no
+happens-before edge between those paths, so the comparison feature can permanently observe
+`null`. On x86 this usually works, which is exactly why it would go unnoticed.
+
+**Fix:** `private volatile boolean completed;`
+
+### P1-3 ✅ Cancellation leaves the simulator in an inconsistent state
+
+**File:** `src/Ic2ExpReactorPlanner/AutomationSimulator.java:318-321`
+
+```java
+if (isCancelled()) {
+    publish(formatI18n("Simulation.CancelledAtTick", reactorTicks));
+    return null;    // skips completed = true, firePropertyChange, elapsed-time publish
+}
+```
+
+The early `return` skips `completed = true`, the `"completed"` property change that
+`ReactorPlannerFrame.java:1990` waits on, and the elapsed-time report.
+
+**Fix:** set `completed = true` and fire the property change before returning.
+
+---
+
+### P1-4 ✅🆕 Heat-output units are inconsistent between the total and the per-tick figures
+
+**File:** `src/Ic2ExpReactorPlanner/AutomationSimulator.java`
+
+```java
+data.totalHUoutput = 40 * totalHeatOutput;
+data.avgHUoutput   =  2 * totalHeatOutput / reactorTicks;
+data.minHUoutput   =  2 * minHeatOutput;
+data.maxHUoutput   =  2 * maxHeatOutput;
+```
+
+The total is scaled by 40 but the average and min/max by 2, so the per-tick figures come out
+**20x smaller** than the total implies. Measured on a rod feeding a heat vent (4 heat/tick for
+20 000 ticks):
+
+* `totalHUoutput` = 3 200 000, and 3 200 000 / 20 001 = **160 HU/t** implied
+* `maxHUoutput`   = **8**, and `avgHUoutput` ≈ 8 — which is what the report prints as
+  "…, 8 HU/t max"
+
+The EU path is self-consistent (`totalEUoutput` in EU/tick divided by 20 for EU/t), so the heat
+path looks like a copy of it with the wrong divisor. Either the per-tick scale should be 40, or
+the total should be 2. Pinned by `AutomationSimulatorTest.Output.fluidReportsHeat` so the
+discrepancy cannot change unnoticed.
+
+---
+
+## P2 — Performance (measured)
+
+### P2-1 ✅ `ImageIcon` churn: up to 127 throwaway icons per resize event, 54 per keystroke
+
+**File:** `src/Ic2ExpReactorPlanner/ReactorPlannerFrame.java` — 4 sites, **all** of which
+call `getScaledInstance(..., Image.SCALE_FAST)` inside `new ImageIcon(...)`:
+
+| site    | context                                    | icons per invocation |
+|---------|--------------------------------------------|----------------------|
+| `:283`  | button action listener (place a component) | 1                    |
+| `:1904` | `plannerResized` — palette                 | **73**               |
+| `:1919` | `plannerResized` — reactor grid            | **54**               |
+| `:2551` | `updateReactorButtons`                     | **54**               |
+
+`updateReactorButtons()` is invoked from the code-field `DocumentListener`
+(`ReactorPlannerFrame.java:360-367`) on **every keystroke**, and `plannerResized` is a
+`componentResized` listener that fires continuously while dragging the window — so a single
+window drag produces thousands of scaled `BufferedImage`s and, because
+`new ImageIcon(Image)` loads asynchronously, thousands of loader threads.
+
+**Fix:** cache scaled images keyed by `(component id, pixel size)` and reuse one
+`ImageIcon` instance per button; skip entirely when the computed size is unchanged.
+
+### P2-2 ✅ Flat component snapshot in the tick loop — measured **40 % faster**
+
+**File:** `src/Ic2ExpReactorPlanner/AutomationSimulator.java`
+
+Per tick there are **6 unconditional + 1 conditional** 6×9 grid iterations, each going
+through the bounds-checked `Reactor.getComponentAt`:
+
+| loop                                  | line | unconditional?            |
+|---------------------------------------|------|---------------------------|
+| `preReactorTick`                      | 195  | yes                       |
+| `generateHeat`/`dissipate`/`transfer` | 207  | yes                       |
+| `generateEnergy`                      | 227  | yes (under `if (active)`) |
+| CSV row output                        | 283  | conditional               |
+| `calculateHeatingCooling`             | 786  | yes (after tick 20)       |
+| `handleAutomation`                    | 694  | yes (when automated)      |
+| `handleBrokenComponents`              | 579  | yes                       |
+
+**A/B benchmark** (16-component reactor, 2 M ticks each, headless):
+
+```
+current  (6 x 6x9 grid loops)     566.2 ns/tick
+proposed (flat ReactorItem[])      340.7 ns/tick     -> -40%
+```
+
+`Reactor.getComponentAt` costs 3.9 ns/call including the bounds check.
+
+**Fix:** snapshot non-null components into a flat `ReactorItem[]` once per simulation
+(rebuilt whenever the grid changes) and iterate that in all seven loops.
+
+**Honest framing:** absolute speed is fine — 566 ns/tick means the default 5 000 000-tick
+run takes ~2.8 s. This is a *cheap* 40 % win, not a fix for a user-visible stall.
+
+### P2-3 🔍 Minor, safe to bundle with the above
+
+| # | Finding                                                                                                                                                                    | Evidence                                                      |
+|---|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| a | `AutomationSimulator.process()` calls `chunk.matches("R\\dC\\d:.*")` — `String.matches` recompiles the pattern on every call, on the **EDT**                               | `AutomationSimulator.java:597` (single occurrence confirmed)  |
+| b | 4 `getI18n(...)` resource-bundle lookups **per CSV row**                                                                                                                   | `AutomationSimulator.java` CSV block, lines confirmed by scan |
+| c | `calculateHeatingCooling()` runs every tick after tick 20 but its totals are consumed exactly once, inside `showHeatingCooling()`                                          | read of both methods                                          |
+| d | `Exchanger.transfer()` recomputes loop-invariant `mymed`/`getCurrentHeat()/getMaxHeat()` inside the neighbour loop; `getCurrentHeat()` is not mutated until after the loop | `Exchanger.java:69, 96`                                       |
+| e | `TextureFactory.getImage` never `break`s out of `ASSET_PATHS` after a hit → up to 8 redundant `ZipEntry` lookups; called 72× at class init                                 | `TextureFactory.java:37-52`                                   |
+
+---
+
+## P3 — Dead code and correctness-adjacent cleanup
+
+### P3-1 ✅ `needsCooldown` is never set to `true` — the feature is dead
+
+```
+'= true' assignments: 0 | other references: 2
+```
+
+`AutomationSimulator.java:33` declares the array; lines 438-440 are the only uses, and they
+only *clear* it. The per-component `ComponentInfo.CooldownTime` report can therefore never
+appear. Either populate it when a component still holds heat at the end of the main loop, or
+delete the field.
+
+### P3-2 ✅ Stale `lastEUoutput` folded into min/max in the cooldown loop
+
+`AutomationSimulator.java:433-436` — `lastEUoutput` is updated in the *main* loop but not in
+the cooldown loop, yet `minEUoutput`/`maxEUoutput` are updated from it there. Idempotent, so
+harmless today, but it is copy-paste from the wrong loop.
+
+### P3-3 ✅ `getOldCode()` compares `resumeTemp` against `DEFAULT_SUSPEND_TEMP`
+
+`Reactor.java` — `DEFAULT_RESUME_TEMP` and `DEFAULT_SUSPEND_TEMP` are both `120e3` today, so
+there is no behavioral difference (verified: `resumeTemp=60000` does emit `|r1aao`). Pure
+latent bug; fix while you are in the file.
+
+### P3-4 ✅ `catch (Throwable e)` in `doInBackground`
+
+`AutomationSimulator.java` — swallows `OutOfMemoryError`/`StackOverflowError` and dumps the
+stack trace into the user-facing `JTextArea`. Narrow to `Exception` (or
+`RuntimeException`) and let `Error` propagate; the default uncaught-exception handler already
+installed in `main()` will surface it properly.
+
+### P3-5 ✅ `GGFuelRod` carries three dead fields that shadow live `FuelRod` state
+
+```
+GGFuelRod.energyMult   : 0 apparent reads outside declaration/copy
+GGFuelRod.rodCount     : 0 apparent reads outside declaration/copy
+GGFuelRod.GTNHbehavior : declared at :11, assigned at :14 — never read
+```
+
+`FuelRod` already declares its own `private final int energyMult` and `rodCount`, and its
+`GTNHbehavior` *is* read (lines 177, 208, 217, 289). `GGFuelRod`'s copies are shadowed and
+dead; `getRodCount()`/`getEnergy()` resolve to `FuelRod`'s. `GGFuelRod.setGTNHBehavior()`
+being called from `gtVersionComboActionPerformed` is misleading — remove all three plus the
+setter call.
+
+### P3-6 🔍 `CoolantCell` counts negative heat — cosmetic only
+
+`CoolantCell.java:31` — `currentCellCooling += heat` with no sign guard, unlike
+`Condensator` which early-returns on `heat < 0`. Measured: `+500, -900, -2000, +300` leaves
+`currentCellCooling = -2 100`.
+
+**⚠️ Correction:** the first pass implied reported values were wrong. They are not —
+`bestCellCooling` is maintained with `Math.max` so it stays monotonic (`500` in the same
+run), and `bestCellCooling` is what the UI actually reports. Only the per-tick
+`currentCellCooling` goes negative, and nothing reads it. Downgraded to cosmetic; add the
+sign guard for consistency with `Condensator`, or leave it.
+
+### P3-7 ⚠️ `plannerResized` calls `setSize()` from inside its own `componentResized` handler
+
+`ReactorPlannerFrame.java:1889-1899` — resize-feedback / flicker risk, and it runs the
+127-icon rebuild from P2-1 on every event. Guard on an actual size change.
+
+### P3-8 ⚠️ `TextureFactory` classpath fallback only tries `imageNames[0]`
+
+`TextureFactory.java:61-69` — the zip branch iterates *all* fallback names, the classpath
+branch only `imageNames[0]`. Asymmetric: a texture whose first name is absent from the jar
+but whose second name is present will silently render blank. Make both branches iterate the
+full list.
+
+### P3-9 🔍 `MaterialsList.getMaterialsForComponent` can return `null` → `NullPointerException`
+
+Verified all **72 components have entries (0 missing)**, so this is latent, not live. But
+`Reactor.getMaterials()` does `result.add(getMaterialsForComponent(...))` with no null
+check, and `add(Object...)` throws `NullPointerException` on a null element. Adding a
+component without a recipe entry crashes the GUI; a null guard turns it into a missing
+ingredient.
+
+### P3-10 🔍 `handleTaloniusCode` throws `HeadlessException` out of `setCode`
+
+`Reactor.handleTaloniusCode` declares `throws HeadlessException` (via `JOptionPane`) and
+`setCode` neither declares nor catches it. Harmless in the GUI; it makes the class
+unusable headless, which blocks any future headless/CI regression testing — worth fixing
+*before* you add the tests P0-1/P0-2 need.
+
+### P3-11 🔍 Non-volatile global mutable config read across threads
+
+`FuelRod.GT509behavior`, `FuelRod.GTNHbehavior`, `Reflector.mcVersion`,
+`MaterialsList.gtVersion`, `MaterialsList.componentMaterialsMap` and the **public mutable**
+`MaterialsList.basicCircuit` / `advancedCircuit` / `alloy` / `coolantCell` /
+`iridiumPlate` are written on the EDT (version-combo handlers, which rebuild
+`componentMaterialsMap`) and read from the simulation thread. Same visibility concern as
+P1-2. Low impact in practice since the simulation runs on a separate `Reactor`, but the map
+rebuild is a genuinely visible risk.
+
+### P3-12 🔍 `ReactorItem.setAutomationThreshold` / `setReactorPause` accept any value
+
+`ReactorItem.java` — no clamping, despite spinners bounding them to
+`[0, Reactor.MAX_COMPONENT_HEAT]` and `[0, 10e3]`. A code carrying a negative or
+out-of-range threshold is honored, and `handleAutomation()` compares against it directly.
+Consider clamping on read.
+
+### P3-13 ✅🆕 `Vent.getVentCoolingCapacity()` dereferences `parent` without a null check
+
+**File:** `src/Ic2ExpReactorPlanner/components/Vent.java:92`
+
+```java
+public double getVentCoolingCapacity() {
+    double result = selfVent;
+    if (sideVent > 0) {
+        ReactorItem component = parent.getComponentAt(row - 1, col);   // parent may be null
+```
+
+Only `componentHeatVent` has a non-zero `sideVent`, so an **unplaced** `componentHeatVent`
+throws `NullPointerException` from either `getVentCoolingCapacity()` or `producesOutput()`.
+The GUI only ever asks placed components, so this is latent rather than live — but it is exactly
+the trap a refactor falls into if it starts querying `ComponentFactory` prototypes for tooltips
+or for the palette. Vents with `sideVent == 0` return before touching `parent` and are safe.
+Pinned by `VentTest.unplacedSideVentThrowsOnVentCoolingCapacity`.
+
+### P3-14 ✅🆕 `Plating` is the only component type with no tooltip override
+
+`ReactorItem.formatTooltip()` returns `null` by default and `Plating` does not override it, so
+all three platings return `null`. `ReactorPlannerFrame.buildTooltipInfo` depends on catching the
+resulting `NullPointerException` and falling back to a bare name — an exception-driven code path
+that is easy to break. Pinned by `ComponentFactoryTest.onlyPlatingLacksATooltip`.
+
+### P3-15 ✅🆕 Overfill refusal in `adjustCurrentHeat` is off by one
+
+**File:** `src/Ic2ExpReactorPlanner/components/ReactorItem.java`
+
+```java
+if (tempHeat > getMaxHeat()) {
+    result = getMaxHeat() - tempHeat + 1;
+```
+
+For an overflow of **N** heat this reports **−(N − 1)** rather than −N: filling a 60 000 cell
+that is 1 000 over returns −999. Underflow is exact (`result = tempHeat`). Harmless today
+because callers only test the sign, but it means the refusal value is not the amount refused.
+Pinned by `ReactorItemTest.AdjustCurrentHeat.clampsToTheCapacityRange`.
+
+### P3-16 ✅🆕 A broken component's `adjustCurrentHeat` becomes an unclamped pass-through
+
+`ReactorItem.adjustCurrentHeat` guards on `isHeatAcceptor()`, which is `maxHeat > 1 &&
+!isBroken()`. Once a component reaches its capacity it is *broken*, so the guard fails and the
+method returns `heat` **unchanged**, with no clamping at either end. So
+`adjustCurrentHeat(-61 000)` on a full 60 000 cell returns −61 000 and leaves the stored heat at
+60 000, rather than returning −1 000 and clamping to zero. Not reachable from the current GUI
+(callers select neighbours before offering heat, and a broken cell is skipped by the caller's
+`isBroken()` check), but it is a sharp edge: "clamped to [0, maxHeat]" is only true while the
+component is unbroken. Pinned by `ReactorItemTest.brokenComponentPassesAdjustmentsThrough`.
+
+### P3-17 ✅🆕 `GGFuelRod.getHeatBonus()` shadows the global GT5.09/GTNH bonus entirely
+
+`GGFuelRod` overrides `getHeatBonus()` to return a per-rod field, so it never consults the 1.5
+that `FuelRod` returns in GT5.09 and GTNH mode. Consequence: flipping the GT version changes a
+vanilla mox rod's output but **not** a compressed- or liquid-plutonium rod's, even though those
+rods carry their own bonus (6 and 2 respectively). The per-rod value is only consulted for mox
+rods; the six non-mox variants all carry 0. If the per-rod bonus is meant to be an *additional*
+modifier, the override needs to compose with the global one instead of replacing it.
+Pinned by `PassiveComponentsTest.GGFuelRods`.
+
+### P3-18 ✅🆕 `currentCondensatorCooling` counts heat *offered*, not heat accepted
+
+A second, reporting-side consequence of P0-2: `Condensator.adjustCurrentHeat` adds the requested
+heat to `currentCondensatorCooling` *before* working out how much it can take, so a nearly-full
+condensator reports full credit for heat it then refuses. Measured: after 10 000 + 19 000 into an
+RSH it reports 29 000 of "received heat" while only 11 000 was stored. Fixing P0-2 does **not**
+fix this; the accumulation needs to move after the acceptance is computed.
+Pinned by `CondensatorTest.coolingMetricCountsOfferedHeat`.
+
+### P3-19 ✅🆕 `SimulationData`'s output totals are only filled in for non-exploding runs
+
+Not a crash, but a trap for anyone reading the data: in `AutomationSimulator` every output
+field (`totalReactorTicks`, `totalEUoutput`, `avg/min/maxEUoutput`, `totalHUoutput` and the
+matching HU fields) is written only inside the "did not explode" branch. For a design that
+explodes they all stay at their zero defaults, while `timeToBurn` / `timeToXplode`, `maxTemp`
+and the broken/depleted details *are* populated. The GUI's comparison view therefore shows
+zeros for exploding designs rather than "not applicable". Pinned by
+`AutomationSimulatorTest.Output.explodingRunsLeaveOutputTotalsAtZero`; decide whether to
+populate them for exploding runs too.
+
+---
+
+## ✔️ Checked and cleared — *not* bugs
+
+Recorded so these are not re-investigated.
+
+| Check                                                 | Result                                                                                                                                                                                                                                                                                                                        |
+|-------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `BigintStorage` code round-trip                       | Byte-identical for a mixed 7-component reactor; `heat=4321`, `maxTicks=123456`, `fluid`, `automated` all survive                                                                                                                                                                                                              |
+| `120e3` storage boundary                              | **Not** a bug. `store()` is inclusive (`value > max` throws), so `currentHeat = 120000` is fine. ⚠️ First pass speculated it threw — retracted; the real trigger is the unclamped legacy-code heat in P1-1                                                                                                                    |
+| `Plating.addToReactor`/`removeFromReactor` accounting | Correct. Same instance placed in two cells still counts once (+1 700, not +3 400); `clearGrid()` restores exactly 10 000 — no leak                                                                                                                                                                                            |
+| UI-reachable `maxHeat` ceiling                        | 101 800 max, so the 120 000 code bound is unreachable from the heat spinner                                                                                                                                                                                                                                                   |
+| `FuelRod.handleHeat` remainder distribution           | Correct integer div/mod distribution to neighbours                                                                                                                                                                                                                                                                            |
+| `handleTaloniusCode` warnings                         | Correct behaviour; only the exception type is a problem (P3-10)                                                                                                                                                                                                                                                               |
+| `ArrayList` allocation in the tick hot path           | ⚠️ **First pass over-emphasised this.** 32 B/call measured in isolation, but **0 B/tick** at steady state with full inlining — JIT escape analysis eliminates them. Real in source, immaterial in practice. Only `componentHeatVent` (`sideVent = 4`) allocates in `Vent.dissipate`; the other four vents have `sideVent = 0` |
+| `getMaterialsForComponent` NPE                        | Latent only — all 72 components covered (P3-9)                                                                                                                                                                                                                                                                                |
+| `minEUGenerated` / `minHeatGenerated` reset to `Double.MAX_VALUE` | Correct, and deliberate: re-arming the minimum to `Double.MAX_VALUE` means the next real value automatically becomes the new minimum. Resetting them to 0 would be the bug.                                                                                                                                                       |
+| `getComponentList()` returns one line per component | It *aggregates* like `getMaterials()`, e.g. two rods render as a single `2 Fuel Rod (Uranium)`. Assumed otherwise at first; it is what the GUI shows.                                                                                                                                                                             |
+| `Reflector.getMaxDamage()` dividing by 3 on 1.7.10  | Correct and intentional. `maxDamage == 1` components (iridium reflector) are excluded, so indestructible parts stay indestructible                                                                                                                                                                                   |
+| `MaterialsList` rounding counts to 2 decimals      | By design: `UI.MaterialDecimalFormat` is `#,##0.##`. Only the rendered text rounds; the stored value keeps full precision                                                                                                                                                                                                       |
+| `Plating` being the only type without a tooltip     | Verified consistent, but see P3-14 — the frame depends on catching the resulting `NullPointerException`                                                                                                                                                                                                                       |
+
+---
+
+## Recommended order of work
+
+1. **P0-1** `Exchanger` — a four-token fix, and all three affected components become correct.
+   The characterisation tests will fail and the disabled contract tests in
+   `ExchangerTest.IntendedReactorCascade` will pass: that is the intended signal.
+2. **P0-2** `Condensator` — a one-line fix, but expect published-code numbers to shift, so
+   read `CondensatorTest.IntendedBound` first. The 3 tests there are `@Disabled`; remove the
+   annotation once you land the fix. Do not forget P3-18 in the same change.
+3. **P1-1** legacy-code validation — turns paste-and-crash into paste-and-warn. The tests under
+   `ReactorCodeSerializationTest.Malformed` currently assert the *crashing* behaviour and need
+   inverting to `assertDoesNotThrow` once it is fixed.
+4. **P2-1** `ImageIcon` caching — the only change users will actually perceive.
+5. **P2-2** flat component snapshot — measured −40 %, mechanical, self-contained.
+6. **P1-2 / P1-3** `volatile` + cancel path — two-line fixes.
+7. **P1-4** decide the heat-unit divisor and make the total and the per-tick figures consistent.
+8. **P3 sweep** — delete the dead `GGFuelRod` fields and `needsCooldown`, fix the
+   `DEFAULT_RESUME_TEMP` comparison and the stale `lastEUoutput`, narrow `catch (Throwable)`,
+   precompile the `process()` regex, hoist the CSV bundle keys, tidy `plannerResized`, and add
+   the `parent` null guard in `Vent.getVentCoolingCapacity()`.
+
+## Testing
+
+A 453-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`. It exists so the work
+above can be done without breaking things, and it is written to be kept rather than thrown away.
+
+### Running it
+
+```bash
+./gradlew test                       # the whole suite
+./gradlew test --tests '*FuelRod*'   # one class or nested class
+```
+
+Two environment notes:
+
+* **Gradle 7.6 cannot run on Java 21+.** The `JAVA_HOME` on this machine points at JDK 21, so
+  the wrapper dies with `Unsupported class file major version 65`. Use a Java 8/11/17/19 JDK:
+
+  ```bash
+  JAVA_HOME="/c/Program Files/Java/jdk1.8.0_202" ./gradlew --offline test
+  ```
+
+* **`./gradlew build` also runs `spotlessCheck`, which needs network access** to fetch
+  `google-java-format:1.7`. That fails offline on this machine both before and after these
+  changes, so it is pre-existing and not caused by the suite. **Run `./gradlew spotlessApply`
+  once with network access before pushing** — the new test sources have not been through the
+  GTNH formatter and will almost certainly be reflowed. The `test` task itself works offline.
+
+### Layout
+
+| File | What it locks down |
+|---|---|
+| `TestSupport` | Shared fixtures: global-config reset, grid helpers, headless simulation driver, materials-list parser. |
+| `SmokeTest` | Proves the test source set, the JUnit platform and the `processAssets` resource classpath are wired up. |
+| `components/FuelRodTest` | Heat/EU formulas across 0–4 neutron neighbours for 7 representative rods; GT5.09 and GTNH modes; heat splitting; depletion; mox. |
+| `components/ExchangerTest` | The four cascade tiers × four exchangers, side and reactor transfer, reported capacities. Includes a `@Disabled` contract spec. |
+| `components/CondensatorTest` | The absorption bound, RCI thresholds, offered-vs-accepted reporting. Includes `@Disabled` contract specs. |
+| `components/VentTest` | Self venting, hull draw, side spreading, refusal semantics, reported capacities. |
+| `components/PassiveComponentsTest` | Coolant cells, reflectors (incl. 1.7.10 scaling), breeder cells, plating accounting, GoodGenerator rods. |
+| `ReactorItemTest` | Base-class defaults, settings guards, heat clamping, classification, per-tick reset, no-op hooks. |
+| `ReactorTest` | Grid bounds, heat accumulator, mode flags, materials aggregation. |
+| `ReactorCodeSerializationTest` | Round-trips every one of the 72 components, a full 54-slot layout, all mode combinations, code revisions 0–4, the legacy hex format, Talonius codes, and every malformed-input case. |
+| `AutomationSimulatorTest` | End-to-end: determinism, heating to explosion, output totals, cooling, pulsed/automated/fluid modes, coolant injectors, explosion power, depletion, CSV output. |
+| `MaterialsListTest` | Recipe aggregation, every component has a recipe, GT-version and flag variants, comparison rendering. |
+| `ComponentFactoryTest` | The id/name registries, copy-on-create, subclass preservation, tooltip coverage. |
+| `BigintStorageTest` | Field packing order, bounds checking, Base64 round-trip. |
+| `ReactorPlannerFrameMappingTest` | The register-name mapping, and that every tooltip label resolves to a real component. |
+
+### Design notes
+
+**Expected values are derived independently, not snapshotted.** Where a formula is derivable
+from the IC2 rules it is re-derived inside the test
+(`pulses = neighbours + 1 + rodCount / 2`, `heat = heatMult * pulses * (pulses + 1)`), so the
+test and the implementation cannot drift together. This caught several errors in *my own*
+first-draft expectations — the dual and quad rod heat curves, `thorium`'s `heatMult` of 0.5,
+coaxium's `heatMult` of 0, and the GTNH energy formula's integer `rodCount / 2` — in every case
+the implementation was right and my arithmetic was not.
+
+**Invariants plus a few golden values.** The simulation tests lean on relationships any correct
+implementation must satisfy (determinism, "more cooling survives longer", "pulsing makes less
+EU", "automation keeps cells from breaking", heat is conserved across a split) with only
+hand-checkable golden values on top. A bare rod makes 4 heat/tick, the hull holds 10 000 and
+rods have 20 000 durability, so tick counts like 2 500, 167, 417 and 522 are all derivable by
+hand.
+
+**Known-bug handling.** For P0-1 and P0-2 the suite pins *current* behaviour in clearly named
+`Current…` tests and states the *intended* behaviour in `@Disabled` contract tests that
+reference this document. Fixing the bug flips them over: the characterisation tests fail, the
+contract tests pass. 4 tests are currently skipped for this reason.
+
+**Global static state.** `FuelRod.GT509behavior`, `Reflector.mcVersion`, the `MaterialsList`
+version flags and friends are process-wide. `TestSupport.resetGlobalConfig()` runs in both
+`@BeforeEach` and `@AfterEach` of every test class, so no test can depend on another's ordering.
+
+**Headless simulation.** `AutomationSimulator` is a `SwingWorker` taking a `JTextArea` and a
+`JPanel[][]`; both are `JComponent`s and construct with no display, so the whole simulator runs
+headless. One wrinkle to keep in mind: `SwingWorker.get()` returns before the `publish` batches
+have been rendered, so `TestSupport.awaitCompletion()` waits for the final report line before
+reading the text. Any new test asserting on report text must do the same.
+
+### Does it actually catch regressions?
+
+The suite was validated by mutation testing: 13 bugs injected into `src/` one at a time, with
+`src/` restored after each. **All 13 were caught.** A full run takes about 7 seconds.
+
+| Injected bug | Result |
+|---|---|
+| P0-2 `Condensator`: `maxHeat - heat` → `maxHeat - currentHeat` | 4 failed |
+| P0-1 `Exchanger`: reactor cascade `switchSide` → `switchReactor` | 3 failed |
+| `FuelRod`: `heatMult * pulses * (pulses + 1)` → `* pulses` | 26 failed |
+| `FuelRod`: drop the mox energy bonus (vanilla path) | 1 failed |
+| `FuelRod`: drop the mox energy bonus (GTNH path) | 1 failed |
+| `Vent`: `selfVent` → `selfVent - 1` | 14 failed |
+| `BreederCell`: halve the heat-bonus step | 2 failed |
+| `Reactor`: base `maxHeat` 10 000 → 12 000 | 28 failed |
+| Code writer: swap the `fluid` and `RCIs` fields | 5 failed |
+| `ComponentFactory.createComponent`: return the prototype | 9 failed |
+| `AutomationSimulator`: skip `handleAutomation` | 5 failed |
+| `MaterialsList`: dual rod costs 3 rods instead of 2 | 1 failed |
+| `BigintStorage.extract`: `max + 1` → `max` | 59 failed |
+
+### Gaps worth closing
+
+* **No test drives `ReactorPlannerFrame` itself.** The frame needs a display, so only its pure
+  static helpers are covered. The generated Swing in `initComponents` (~2 400 lines) is
+  untested; P2-1 and P3-7 will need a manual pass.
+* **No fuzz or property test on `Reactor.setCode`.** The malformed cases are hand-picked. A
+  generator over random byte strings is the natural way to close P1-1 off properly.
+* **No performance regression guard.** P2-1 and P2-2 were measured with a throwaway harness,
+  not by a benchmark in the suite. If you want to keep the 40 % win, add one.
+* **`TextureFactory` is only covered** by the fact that every component has a non-null image.
+  The texture-pack fallback-name asymmetry in P3-8 needs a real pack to exercise.

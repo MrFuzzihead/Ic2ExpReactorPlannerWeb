@@ -71,10 +71,10 @@ repositories {
 }
 
 dependencies {
-    // TODO: Add dependencies here ...
-    // You can read more about how to add dependency here:
-    //   http://www.gradle.org/docs/current/userguide/dependency_management.html#sec:how_to_declare_your_dependencies
-    //  testCompile group: 'junit', name: 'junit', version: '4.10'
+    // JUnit 5 regression suite for the calculation + simulation logic. See CODE_REVIEW.md.
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 jar {
@@ -125,6 +125,23 @@ task processAssets(type: Copy) {
         include 'Ic2ExpReactorPlanner/Bundle*.properties'
     }
     into 'build/classes/java/main'
+}
+
+// Regression suite: JUnit 5, headless. Covers component calculation logic, the tick
+// simulation loop, and reactor code serialization. Bundles/textures live under src/,
+// which is a *java* srcDir, so processAssets is what puts them on the test classpath.
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    dependsOn processAssets
+    // processAssets writes into the main classes dir, which compileTestJava consumes.
+    dependsOn tasks.named('compileTestJava')
+    systemProperty 'java.awt.headless', 'true'
+    maxHeapSize = '1g'
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat = 'full'
+        showStandardStreams = false
+    }
 }
 
 run {
