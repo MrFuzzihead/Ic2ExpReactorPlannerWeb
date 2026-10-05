@@ -101,14 +101,18 @@ public class Exchanger extends ReactorItem {
             if (add > switchReactor) {
                 add = switchReactor;
             }
+            // The low-heat cascade scales the transfer by the capacity of the transfer being
+            // performed, which in this block is always switchReactor. It used to read
+            // switchSide here, which for three of the four exchangers is a different constant;
+            // see CODE_REVIEW.md P0-1.
             if (Reactormed + mymed / 2.0 < 1.0) {
-                add = switchSide / 2;
+                add = switchReactor / 2;
             }
             if (Reactormed + mymed / 2.0 < 0.75) {
-                add = switchSide / 4;
+                add = switchReactor / 4;
             }
             if (Reactormed + mymed / 2.0 < 0.5) {
-                add = switchSide / 8;
+                add = switchReactor / 8;
             }
             if (Reactormed + mymed / 2.0 < 0.25) {
                 add = 1;

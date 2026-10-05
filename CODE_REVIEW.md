@@ -16,27 +16,31 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 
 |                                              | Count |
 |----------------------------------------------|-------|
-| P0 — wrong simulation results                | 2     |
+| P0 — wrong simulation results                | 2 (1 fixed) |
 | P1 — crashes / data races                    | 4     |
 | P2 — performance                             | 2     |
 | P3 — dead code, correctness-adjacent cleanup | 18    |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **453** |
+| **Covered by an automated regression test**  | **473** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
 is leak-free). The genuinely dangerous problems are two wrong-heat-transfer formulas in
 `Exchanger`/`Condensator`, and unvalidated legacy-code parsing that can crash the GUI.
 
-**A 453-test regression suite now exists** so that the fixes above can be made safely; see
-[Testing](#testing) at the end. Writing it also surfaced six further findings, marked
-**🆕** below.
+**A 473-test regression suite and a 304-design simulation corpus now exist** so that the fixes
+above can be made safely; see [Testing](#testing) at the end. Building them also surfaced six
+further findings, marked **🆕** below, and escalated P0-2 from a rounding error into a
+silently-wrong safety verdict.
+
+**Status:** P0-1 `Exchanger` — **fixed and verified**. P0-2 `Condensator` — open, and now the
+more urgent of the two.
 
 ---
 
 ## P0 — Simulation produces wrong results
 
-### P0-1 ✅⚠️ `Exchanger.transfer()` — reactor-side heat cascade uses the wrong field
+### P0-1 ✅ FIXED — `Exchanger.transfer()` — reactor-side heat cascade used the wrong field
 
 **File:** `src/Ic2ExpReactorPlanner/components/Exchanger.java:100-116`
 
@@ -75,8 +79,44 @@ tier <0.5 fires -> code add = switchSide/8 = 0/8 = 0
 code moved 0 heat into reactor; correct (switchReactor/8 = 9) would move 9
 ```
 
-**Fix:** replace the four `switchSide` references in the `switchReactor > 0` block with
-`switchReactor`. The side block (`switchSide > 0`) is already correct.
+**Fix:** replace the `switchSide` references in the `switchReactor > 0` block with
+`switchReactor`. The side block (`switchSide > 0`) is already correct and must be left alone.
+
+#### ✅ Applied and verified
+
+The three reactor-block tiers now read `switchReactor / 2`, `/ 4`, `/ 8`, with a comment
+explaining why. Verified four ways:
+
+1. **The tier table is exact.** `ExchangerTest.ReactorSideCascade.cascadeScalesBySwitchReactor`
+   asserts all nine band/cap combinations, with integer division where it bites
+   (`heatExchanger`'s cap of 4 gives 0 in the `/8` band).
+2. **The invariant is restored.** `neverExceedsTheCapacity` sweeps `sum` from 0.05 to 1.00 in
+   0.05 steps and asserts no transfer ever exceeds `switchReactor` — which the old code
+   violated for `heatExchanger` and `advancedHeatExchanger`, which over-transferred.
+3. **The hot path provably did not move.** For `sum >= 1.0` no tier fires, so neither field is
+   read and the transfer is just the round-and-clamp value. That is why the blast radius is
+   confined to cold exchangers; `hotPathIsUnchangedByTheFix` pins it.
+4. **Corpus containment.** Exactly **12 of 304** designs moved, and *every one* is tagged
+   `exchanger` — the prediction held. 292 designs are byte-identical.
+
+**Two tests were added that the fix itself did not require**, because the mutation check found
+the gaps:
+
+* **Single-tier partial reverts are caught.** Reverting only the `/2`, only the `/4`, or only
+  the `/8` line each fails the suite, so a half-applied fix cannot slip through.
+* **Over-correction is caught.** Switching the *side* block to `switchReactor` — the obvious
+  way to "fix" this by blanket-replacing the field — was **not** caught until
+  `sideCascadeScalesBySwitchSide` was added, because the existing side-transfer tests only
+  asserted {@code > 0}. The side block is correct and is now pinned with its own tier table so
+  nobody "fixes" it by accident.
+
+**Note on the end-to-end numbers:** the moved designs shift in both directions
+(`named-core-exchanger`: `tBurn` 1482 → 1494 but `tEvap` 1859 → 1845). The exchanger is a discrete
+oscillator, so changing the step values changes its phase. The justification for the fix is the
+tier table and the invariant, **not** the aggregate numbers — do not "correct" the expectations
+to make an aggregate tidier.
+
+**Skipped test count: 4 → 3.** The remaining three are `CondensatorTest.IntendedBound`.
 
 ---
 
@@ -538,14 +578,12 @@ design as safe".
 
 ## Recommended order of work
 
-1. **P0-1** `Exchanger` — a four-token fix, and all three affected components become correct.
-   The characterisation tests will fail and the disabled contract tests in
-   `ExchangerTest.IntendedReactorCascade` will pass: that is the intended signal. The corpus
-   should report **12 changed designs, all tagged `exchanger`** — if it does not, stop.
-2. **P0-2** `Condensator` — see the escalation note above; this is not a one-line change.
-   Read `CondensatorTest.IntendedBound` first; its 3 tests are `@Disabled` and should pass once
-   you land the fix. Land P3-18 in the same commit. The corpus should report **exactly 1
-   changed design, `named-condensator-over-capacity`**, and its `timeToXplode` should go from
+1. ~~**P0-1** `Exchanger`~~ — **done**, see above. Nothing left to do.
+2. **P0-2** `Condensator` — the next thing to do, and now the more urgent of the two. See the
+   escalation note above: this is not a one-line change. Read `CondensatorTest.IntendedBound`
+   first; its 3 tests are `@Disabled` and should pass once you land the fix, dropping the
+   skipped count to 0. Land P3-18 in the same commit. The corpus should report **exactly 1
+   changed design, `named-condensator-over-capacity`**, whose `timeToXplode` should go from
    "never" to 2. Any other diff means you have changed more than you meant to.
 3. **P1-1** legacy-code validation — turns paste-and-crash into paste-and-warn. The tests under
    `ReactorCodeSerializationTest.Malformed` currently assert the *crashing* behaviour and need
@@ -561,7 +599,7 @@ design as safe".
 
 ## Testing
 
-A 458-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 473-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -647,7 +685,7 @@ Two environment notes:
 | `TestSupport` | Shared fixtures: global-config reset, grid helpers, headless simulation driver, materials-list parser. |
 | `SmokeTest` | Proves the test source set, the JUnit platform and the `processAssets` resource classpath are wired up. |
 | `components/FuelRodTest` | Heat/EU formulas across 0–4 neutron neighbours for 7 representative rods; GT5.09 and GTNH modes; heat splitting; depletion; mox. |
-| `components/ExchangerTest` | The four cascade tiers × four exchangers, side and reactor transfer, reported capacities. Includes a `@Disabled` contract spec. |
+| `components/ExchangerTest` | The cascade tier table for both the reactor block (scales by `switchReactor`) and the side block (scales by `switchSide`), the "never exceeds capacity" invariant, the unchanged hot path, and reported capacities. |
 | `components/CondensatorTest` | The absorption bound, RCI thresholds, offered-vs-accepted reporting. Includes `@Disabled` contract specs. |
 | `components/VentTest` | Self venting, hull draw, side spreading, refusal semantics, reported capacities. |
 | `components/PassiveComponentsTest` | Coolant cells, reflectors (incl. 1.7.10 scaling), breeder cells, plating accounting, GoodGenerator rods. |
@@ -681,10 +719,12 @@ hand-checkable golden values on top. A bare rod makes 4 heat/tick, the hull hold
 rods have 20 000 durability, so tick counts like 2 500, 167, 417 and 522 are all derivable by
 hand.
 
-**Known-bug handling.** For P0-1 and P0-2 the suite pins *current* behaviour in clearly named
+**Known-bug handling.** For P0-2 the suite pins *current* behaviour in clearly named
 `Current…` tests and states the *intended* behaviour in `@Disabled` contract tests that
 reference this document. Fixing the bug flips them over: the characterisation tests fail, the
-contract tests pass. 4 tests are currently skipped for this reason.
+contract tests pass, and the skipped count drops. **3 tests are currently skipped** — all of
+them `CondensatorTest.IntendedBound`, pending P0-2. P0-1 already went through this cycle, which
+is why `ExchangerTest` now has no `Current…` or `@Disabled` remnants.
 
 **Global static state.** `FuelRod.GT509behavior`, `Reflector.mcVersion`, the `MaterialsList`
 version flags and friends are process-wide. `TestSupport.resetGlobalConfig()` runs in both
@@ -699,7 +739,9 @@ reading the text. Any new test asserting on report text must do the same.
 ### Does it actually catch regressions?
 
 The suite was validated by mutation testing: 13 bugs injected into `src/` one at a time, with
-`src/` restored after each. **All 13 were caught.** A full run takes about 7 seconds.
+`src/` restored after each. **All 13 were caught.** Re-run after the P0-1 fix, all were still caught, and three
+additional single-tier partial reverts of P0-1 plus one over-correction (switching the *side*
+block too) were added as new rows. A full run takes about 20 seconds.
 
 | Injected bug | Result |
 |---|---|
@@ -716,6 +758,27 @@ The suite was validated by mutation testing: 13 bugs injected into `src/` one at
 | `AutomationSimulator`: skip `handleAutomation` | 5 failed |
 | `MaterialsList`: dual rod costs 3 rods instead of 2 | 1 failed |
 | `BigintStorage.extract`: `max + 1` → `max` | 59 failed |
+| P0-1 revert: any single cascade tier back to `switchSide` | 3 × failed |
+| P0-1 over-correction: the *side* block switched too | failed |
+
+### Running the mutation checks
+
+The sensitivity evidence above comes from injecting bugs into `src/` and confirming the suite
+fails. Two practical warnings, both learned the hard way:
+
+* **Never clean up with `git checkout -- src/`.** It restores to `HEAD`, not to your working
+  state, so it silently **discards the fix you are verifying**. This happened once during
+  Phase 1 and undid the P0-1 change mid-verification. Copy `src/` to a scratch directory first
+  and restore from that:
+  ```bash
+  rm -rf /tmp/erp-src && cp -r src /tmp/erp-src
+  # ... mutate, test, then:
+  rm -rf src && cp -r /tmp/erp-src src
+  diff -r src /tmp/erp-src && echo "restored"
+  ```
+* **The sources are CRLF.** A patch written with LF line endings will not match, and a silent
+  no-op looks exactly like a passing test. Make the patch tool try both, and always confirm the
+  mutation actually applied.
 
 ### Gaps worth closing
 
