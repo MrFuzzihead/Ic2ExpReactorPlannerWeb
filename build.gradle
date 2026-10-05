@@ -136,6 +136,13 @@ tasks.named('test', Test) {
     // processAssets writes into the main classes dir, which compileTestJava consumes.
     dependsOn tasks.named('compileTestJava')
     systemProperty 'java.awt.headless', 'true'
+    // Opt-in regeneration of testResources/corpus-baseline.txt:
+    //   ./gradlew test -Derp.writeBaseline=true
+    // Only this property is forwarded; the rest of the Gradle JVM env is not leaked into tests.
+    String writeBaseline = System.getProperty('erp.writeBaseline');
+    if (writeBaseline != null) {
+        systemProperty 'erp.writeBaseline', writeBaseline
+    }
     maxHeapSize = '1g'
     testLogging {
         events 'passed', 'skipped', 'failed'

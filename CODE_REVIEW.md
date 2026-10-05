@@ -115,10 +115,53 @@ neighbors, a condensator that is the *only* heatable neighbor receives the full 
 returns true, and `needsCoolantInjected()` (`currentHeat > 0.85 * maxHeat`) is skewed. A
 corrupted condensator then skews every downstream temperature and vented-HU figure.
 
+#### 🔴 Escalation: for an over-capacity packet the bug **deletes heat from the reactor**
+
+Found by the Phase 0 corpus, not by reading. When a single packet exceeds the condensator's
+capacity the bound `min(heat, maxHeat - heat)` goes *negative*, so the condensator absorbs a
+negative amount — and since it never climbs, it never breaks. Meanwhile `FuelRod.handleHeat()`
+**ignores `adjustCurrentHeat`'s return value**:
+
+```java
+currentComponentHeating = heat;
+for (ReactorItem heatableNeighbor : heatableNeighbors) {
+    heatableNeighbor.adjustCurrentHeat(heat / heatableNeighbors.size());   // return discarded
+}
+```
+
+So the rod's entire heat output is silently destroyed. Measured on
+`named-condensator-over-capacity` (The Core rod, 26 880 heat/tick, into an adjacent RSH):
+
+| | today (buggy) | after the fix |
+|---|---|---|
+| `timeToXplode` | never | **2** |
+| `totalEUoutput` | 9 063 808 000 | 0 |
+| `maxTemp` | 0 | 26 880 |
+| condensator breaks at | tick 938 | tick 1 |
+
+A design that is reported today as *safe, producing nine billion EU* in fact destroys 26 880
+heat per tick and cannot ever reach boiling. This is not a rounding error; it is a
+**silently wrong safety verdict**, and it is the reason this is P0.
+
 **Fix:** `double acceptedHeat = Math.min(heat, getMaxHeat() - currentHeat);`
-⚠️ This bug is inherited verbatim from upstream `MauveCloud/Ic2ExpReactorPlanner`, so codes
-may have been *tuned around* the wrong behavior. Add golden-value regression tests before
-changing it, and expect existing published codes' numbers to shift.
+⚠️ Two caveats. First, this is inherited verbatim from upstream
+`MauveCloud/Ic2ExpReactorPlanner`, so codes may have been *tuned around* the wrong behavior.
+Second, the fix is not a one-token change to a one-line bug: the same method also overfills in
+the *opposite* direction when `currentHeat` is already high, and the fix should be landed
+together with P3-18.
+
+**Measured blast radius** (304-design corpus, see [Testing](#testing)): the fix moves
+**exactly 1 design**. 303 designs are byte-identical. Concretely:
+
+| packet regime | effect of the fix |
+|---|---|
+| small packets, under `maxHeat/2` | no end-to-end change |
+| overshoot regime (packet accepted whole, `currentHeat` crosses `maxHeat`) | no end-to-end change — the overshoot amount does not matter |
+| packet > `maxHeat` | **catastrophic**, as tabled above |
+
+So the migration impact on published designs is far smaller than feared — but the one case it
+does hit is a design class that is currently *misreported as safe*, which makes it worth a
+release note rather than a silent patch.
 
 ---
 
@@ -485,14 +528,25 @@ Recorded so these are not re-investigated.
 
 ---
 
+## Phase 0 — the corpus (done)
+
+The differential baseline described under [Testing](#testing) is in place: 304 designs,
+`testResources/corpus-baseline.txt`, and a gate that reports the containment signal for any
+change. It exists so steps 1 and 2 below can be made safely, and it has already paid for
+itself — it is what turned P0-2 from "under-absorbs a little" into "misreports an exploding
+design as safe".
+
 ## Recommended order of work
 
 1. **P0-1** `Exchanger` — a four-token fix, and all three affected components become correct.
    The characterisation tests will fail and the disabled contract tests in
-   `ExchangerTest.IntendedReactorCascade` will pass: that is the intended signal.
-2. **P0-2** `Condensator` — a one-line fix, but expect published-code numbers to shift, so
-   read `CondensatorTest.IntendedBound` first. The 3 tests there are `@Disabled`; remove the
-   annotation once you land the fix. Do not forget P3-18 in the same change.
+   `ExchangerTest.IntendedReactorCascade` will pass: that is the intended signal. The corpus
+   should report **12 changed designs, all tagged `exchanger`** — if it does not, stop.
+2. **P0-2** `Condensator` — see the escalation note above; this is not a one-line change.
+   Read `CondensatorTest.IntendedBound` first; its 3 tests are `@Disabled` and should pass once
+   you land the fix. Land P3-18 in the same commit. The corpus should report **exactly 1
+   changed design, `named-condensator-over-capacity`**, and its `timeToXplode` should go from
+   "never" to 2. Any other diff means you have changed more than you meant to.
 3. **P1-1** legacy-code validation — turns paste-and-crash into paste-and-warn. The tests under
    `ReactorCodeSerializationTest.Malformed` currently assert the *crashing* behaviour and need
    inverting to `assertDoesNotThrow` once it is fixed.
@@ -507,8 +561,62 @@ Recorded so these are not re-investigated.
 
 ## Testing
 
-A 453-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`. It exists so the work
-above can be done without breaking things, and it is written to be kept rather than thrown away.
+A 458-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+simulation corpus** that acts as a differential baseline. Both exist so the work above can be
+done without breaking things, and they are written to be kept rather than thrown away.
+
+### The corpus: a differential baseline for calculation changes
+
+Unit tests pin individual formulas, but they cannot answer the question you actually have when
+changing one: *"which of my designs did this move, and is that the set I expected?"* The corpus
+answers it.
+
+`test/Ic2ExpReactorPlanner/corpus/` builds **304 reactor designs** — every component alone,
+~30 hand-built cases aimed at the known bugs, and 200 seeded pseudo-random layouts — simulates
+each, and records a 36-field fingerprint plus a SHA-256 of the whole run report. The committed
+result lives in `testResources/corpus-baseline.txt`, one line per design, so reviewing a change
+is `git diff` on text.
+
+```bash
+./gradlew test                                  # gate: any drift fails the build
+./gradlew test -Derp.writeBaseline=true         # deliberate regeneration
+```
+
+**The gate is expected to fail whenever a calculation change is intentional.** It is an alarm,
+not a verdict. When it fires, the failure message gives you the containment signal first:
+
+```
+Corpus baseline mismatch: 12 of 304 design(s) differ
+
+EVERY changed design is tagged: [rod, exchanger]
+SOME changed designs also carry: [cell, vent, plating, fluid]
+  -> If your prediction was "only <tag> designs move" and that tag is not
+     in the EVERY line, the change reached something you did not predict.
+```
+
+Validated against the two real fixes:
+
+| fix | designs changed | every changed design is tagged |
+|---|---|---|
+| P0-1 exchanger | 12 / 304 | `rod, exchanger` ✓ |
+| P0-2 condensator | 1 / 304 | `reflector, condensator, rod` ✓ |
+| both | 13 / 304 | `rod` only — the two sets are disjoint ✓ |
+
+**Rules for using it.** Never regenerate without reading the diff; the baseline is only a guard
+if someone actually looks. One fix per commit, so a surprising diff is bisectable. And the
+report lists *co-occurring* tags, not causation — a design appears under every tag it has, so
+"condensator" appearing in a P0-1 diff means a condensator happened to share those designs, not
+that condensator logic moved.
+
+**Two corpus lessons worth knowing.** The exchanger designs are *representative*, not
+cascade-band cases: an exchanger is fed by its neighbour and reaches equilibrium within a couple
+of ticks, so an initial charge is a transient that washes out. Five designs differing only in
+initial charge produced byte-identical results, so they were replaced with five structurally
+distinct ones. The band table itself is pinned by `ExchangerTest`, which is where a per-tick
+property belongs. Separately, the corpus is deliberately locale-pinned and locale-formatted, and
+completion is detected via the `completed` property-change latch rather than by reading
+`AutomationSimulator.getData()` — because `completed` is non-volatile (P1-2) and has no
+happens-before edge with the worker thread.
 
 ### Running it
 
@@ -551,6 +659,10 @@ Two environment notes:
 | `ComponentFactoryTest` | The id/name registries, copy-on-create, subclass preservation, tooltip coverage. |
 | `BigintStorageTest` | Field packing order, bounds checking, Base64 round-trip. |
 | `ReactorPlannerFrameMappingTest` | The register-name mapping, and that every tooltip label resolves to a real component. |
+| `corpus/Corpus` | The 304-design corpus definition, plus a self-check that the design list is stable. |
+| `corpus/CorpusRunner` | Runs one design headlessly and captures its 36-field fingerprint and report hash. |
+| `corpus/BaselineStore` | Reads, writes and diffs `testResources/corpus-baseline.txt`. |
+| `corpus/CorpusBaselineTest` | The differential gate, plus determinism, coverage and per-regime self-checks. |
 
 ### Design notes
 
