@@ -705,11 +705,25 @@ Two environment notes:
   JAVA_HOME="/c/Program Files/Java/jdk1.8.0_202" ./gradlew --offline test
   ```
 
-* **`./gradlew build` also runs `spotlessCheck`, which needs network access** to fetch
-  `google-java-format:1.7`. That fails offline on this machine both before and after these
-  changes, so it is pre-existing and not caused by the suite. **Run `./gradlew spotlessApply`
-  once with network access before pushing** — the new test sources have not been through the
-  GTNH formatter and will almost certainly be reflowed. The `test` task itself works offline.
+* **Spotless is a no-op in a checkout without Blowdryer's shared config.** ⚠️ *An earlier draft of
+  this note claimed the new test sources "will almost certainly be reflowed" by
+  `./gradlew spotlessApply`. That was wrong, and is corrected here.* Measured:
+
+  ```
+  spotlessJava: target = []          # no Java files configured
+  ```
+
+  Deliberately appending misformatted Java to `src/Ic2ExpReactorPlanner/BigintStorage.java`
+  still produced `spotlessCheck: BUILD SUCCESSFUL`. The `gtnhShared` directory that
+  `Blowdryer.file('spotless.gradle')` points at is not present, so the plugin is applied with
+  no Java target at all. `spotlessApply` runs, reports "9 actionable tasks: 9 up-to-date" and
+  changes nothing.
+
+  So formatting here is **unverified, not verified-good** — for the pre-existing code as much
+  as for the new tests. Run `./gradlew spotlessApply` where network is available before
+  pushing, and do not treat a local green `spotlessCheck` as evidence of anything. Note the CI
+  workflow has a step that runs `spotlessApply` and pushes the result, so if the target *is*
+  configured there, the diff will be produced by CI rather than rejected by it.
 
 ### Layout
 

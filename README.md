@@ -75,4 +75,8 @@ actually looks at it.
   heat-transfer formulas, crash and data-race findings, measured performance work, and dead
   code. It also records what was checked and *cleared* as not-a-bug, so those do not get
   re-investigated.
-* Code style is enforced by Spotless: run `./gradlew spotlessApply` before pushing.
+* Code style is enforced by Spotless. **Caveat:** in a checkout where Blowdryer's shared
+  config has not been downloaded, `spotlessJava` ends up with an *empty* target and the check
+  passes without inspecting anything. That is the case offline, and it means formatting is
+  unverified rather than verified-good. Run `./gradlew spotlessApply` somewhere with network
+  access before pushing, and don't trust a local green `spotlessCheck` as evidence.
