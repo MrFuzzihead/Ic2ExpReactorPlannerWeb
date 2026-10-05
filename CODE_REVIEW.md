@@ -18,7 +18,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 |----------------------------------------------|-------|
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
-| P2 — performance                             | 2 (1 fixed) |
+| P2 — performance                             | 2 (2 fixed) |
 | P3 — dead code, correctness-adjacent cleanup | 17 (2 fixed) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **494** |
@@ -34,7 +34,7 @@ further findings, marked **🆕** below, and escalated P0-2 from a rounding erro
 silently-wrong safety verdict.
 
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
-`AutomationSimulator` and P2-1 `ImageIcon` caching — **all fixed and verified**. Both P0s are closed,
+`AutomationSimulator`, P2-1 `ImageIcon` caching and P2-2 the tick-loop snapshot — **all fixed and verified**. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -453,7 +453,7 @@ The third row is honest: when every button holds a different texture *and* the s
 lookup misses and the helper buys ~18 % at best. The win is in the first row, which is the case the
 finding describes — repeated events at an unchanged size.
 
-### P2-2 ✅ Flat component snapshot in the tick loop — measured **40 % faster**
+### P2-2 ✅ FIXED — Flat component snapshot in the tick loop — measured **−54 % on a sparse grid**
 
 **File:** `src/Ic2ExpReactorPlanner/AutomationSimulator.java`
 
@@ -484,6 +484,57 @@ proposed (flat ReactorItem[])      340.7 ns/tick     -> -40%
 
 **Honest framing:** absolute speed is fine — 566 ns/tick means the default 5 000 000-tick
 run takes ~2.8 s. This is a *cheap* 40 % win, not a fix for a user-visible stall.
+
+#### ✅ Applied and verified
+
+Nine loops now walk a flat `ReactorItem[]` snapshot (`tickComponents`) built once per run,
+alongside a parallel `int[] tickCell` holding `row * 9 + col` for the loops that report a
+position. The seven loops named above were converted plus the two cooldown loops
+(`dissipate`/`transfer` and the `needsCooldown` sweep); the four once-per-run loops (CSV
+header, the 54-cell init publish, explosion power, post-run summary) were left on
+`getComponentAt` because they are not on the hot path.
+
+Two departures from the review's wording:
+
+* The snapshot is taken **once**, not "rebuilt whenever the grid changes". Nothing in the
+  simulation calls `setComponentAt`: `handleAutomation` clears heat and damage in place, and
+  a broken component stays in its cell. A rebuild hook would have to be called from every
+  component, which is more code for no observed benefit.
+* The `component != null` guard survives in the two long loops as an explicit `if`, purely so
+  the brace structure of those method bodies stayed intact. It is always true and the JIT
+  hoists it.
+
+**Measured (A/B, alternating processes, best of 3 per process, 2 M ticks, headless):**
+
+| design | before | after | change |
+|---|---|---|---|
+| 5 components (quad rod + 4 coolant cells, automated) | 552–591 ns/tick | 244–273 ns/tick | **−54 %** |
+| 54 components (same, plus 49 plating) | 1387–1673 ns/tick | 1347–1743 ns/tick | ~−7 %, noisy |
+
+The review's 566 → 341 ns/tick reproduces on the sparse design. On a full grid the win is
+single-digit, because the per-tick component work dominates the grid walk there.
+
+**Mutation checks** (each reverted after running the suite):
+
+| mutation | result |
+|---|---|
+| snapshot built column-major instead of row-major | 1 failed (`CorpusBaselineTest`) |
+| `tickCell` dropped, `row`/`col` derived from the loop index in `handleBrokenComponents` | 2 failed (`CorpusBaselineTest`, rod-depletion position) |
+| `snapshotGrid()` never called, loops walk an empty snapshot | 31 failed |
+
+Corpus: **0 of 304 designs moved**, which is what was predicted — the snapshot preserves
+row-major order, so it changes iteration cost, not arithmetic.
+
+**🆕 Side finding — the cancel test was racing, and P2-2 exposed it.**
+`AutomationSimulatorTest > a cancelled run still completes and exposes its data` cancelled
+from the test thread immediately after `execute()`. `SwingWorker` skips `doInBackground`
+outright when it is cancelled before the job's thread gets going, so that test reached the
+cancel branch only by luck, and once the run got faster it stopped reaching it at all. It now
+uses a design that genuinely runs long (an automated quad rod with four 10 k coolant cells,
+which never boils, capped at 2 000 000 ticks) and sleeps 200 ms before cancelling. There is
+no deterministic hook inside `doInBackground`: `SwingWorker.publish(V...)` is *protected* and
+only accumulates, which is why a normal run emits three property events rather than one per
+published line.
 
 ### P2-3 🔍 Minor, safe to bundle with the above
 
@@ -722,7 +773,7 @@ design as safe".
 2. ~~**P1-1** code parsing~~ — **done and verified**; see above. Nothing skipped remains.
 3. ~~**P2-1** `ImageIcon` caching~~ — **done and verified**; see above. The cache is pinned by four
    new tests through a static seam; the memo itself is not observable and is recorded as such.
-4. **P2-2** flat component snapshot — measured −40 %, mechanical, self-contained.
+4. ~~**P2-2** flat component snapshot~~ — done, measured −54 % on a sparse grid (see P2-2).
 5. ~~**P1-2 / P1-3** `volatile` + cancel path~~ — **done and verified**; see above. The `volatile`
    half is not test-observable, which is stated rather than hidden.
 6. **P1-4** decide the heat-unit divisor and make the total and the per-tick figures consistent.

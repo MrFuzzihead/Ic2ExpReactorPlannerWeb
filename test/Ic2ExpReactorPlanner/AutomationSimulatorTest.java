@@ -794,29 +794,32 @@ class AutomationSimulatorTest {
         @Test
         @DisplayName("a cancelled run still completes and exposes its data")
         void cancelledRunStillCompletes() throws Exception {
-            final java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
             final java.util.concurrent.CountDownLatch finished = new java.util.concurrent.CountDownLatch(1);
-            Reactor simReactor = new Reactor();
-            simReactor.setCode(rodWithVent().getCode());
-            simReactor.setMaxSimulationTicks(5_000_000);
+            Reactor simReactor = quadRodWithCells();
+            simReactor.setAutomated(true);
+            // Automation keeps replacing the spent cells, so this design never boils and the run
+            // goes the whole way to the tick cap. A uranium rod on its own depletes on tick 20 001
+            // and a cesium rod explodes on tick 5 001, both of which finish before the cancel below
+            // is issued - and SwingWorker skips doInBackground outright when it is cancelled before
+            // the job's thread gets going, so the cancel has to arrive mid-run.
+            simReactor.setMaxSimulationTicks(2_000_000);
             JTextArea output = new JTextArea(5, 20);
             AutomationSimulator simulator =
                     new AutomationSimulator(simReactor, output, newJPanelGrid(), null, -1);
             simulator.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
                 @Override
                 public void propertyChange(java.beans.PropertyChangeEvent evt) {
-                    if ("state".equals(evt.getPropertyName())) {
-                        started.countDown();
-                    } else if ("completed".equals(evt.getPropertyName())) {
+                    if ("completed".equals(evt.getPropertyName())) {
                         finished.countDown();
                     }
                 }
             });
-            // SwingWorker skips doInBackground outright when it is cancelled before the job starts,
-            // so the cancel has to wait for the RUNNING event. That is also what the GUI does:
-            // ReactorPlannerFrame only ever cancels a simulator it knows is still running.
+            // SwingWorker skips doInBackground outright when it is cancelled before the job's thread
+            // gets going, so the cancel cannot be issued back-to-back with execute(). Sleeping a
+            // beat puts it squarely inside a two-million-tick run, which is what the GUI does when
+            // it cancels a simulator it knows is still running.
             simulator.execute();
-            assertTrue(started.await(60, java.util.concurrent.TimeUnit.SECONDS), "the run started");
+            Thread.sleep(200);
             simulator.cancel(false);
             assertTrue(finished.await(60, java.util.concurrent.TimeUnit.SECONDS), "completed was fired");
             String report = output.getText();
