@@ -17,24 +17,25 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 |                                              | Count |
 |----------------------------------------------|-------|
 | P0 — wrong simulation results                | 2 (both fixed) |
-| P1 — crashes / data races                    | 4 (1 fixed) |
+| P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 2     |
 | P3 — dead code, correctness-adjacent cleanup | 17 (2 fixed) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **489** |
+| **Covered by an automated regression test**  | **490** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
 is leak-free). The genuinely dangerous problems are two wrong-heat-transfer formulas in
 `Exchanger`/`Condensator`, and unvalidated legacy-code parsing that can crash the GUI.
 
-**A 489-test regression suite and a 304-design simulation corpus now exist** so that the fixes
+**A 490-test regression suite and a 304-design simulation corpus now exist** so that the fixes
 above can be made safely; see [Testing](#testing) at the end. Building them also surfaced six
 further findings, marked **🆕** below, and escalated P0-2 from a rounding error into a
 silently-wrong safety verdict.
 
-**Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, and P3-10 — **all fixed
-and verified**. Both P0s are closed, and no test in the suite is skipped.
+**Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10 and P1-2/P1-3
+`AutomationSimulator` — **all fixed and verified**. Both P0s are closed, and no test in the suite
+is skipped.
 
 ---
 
@@ -307,7 +308,7 @@ reactor, with nothing to warn about. Recorded in
 `ReactorCodeSerializationTest.meaninglessPayloadIsInterpretedNotRefused` so a future attempt
 to add an integrity check knows this is the remaining hole.
 
-### P1-2 ✅ `AutomationSimulator.completed` is a non-volatile cross-thread flag
+### P1-2 ✅ FIXED — `AutomationSimulator.completed` is a non-volatile cross-thread flag
 
 **File:** `src/Ic2ExpReactorPlanner/AutomationSimulator.java:92`
 
@@ -323,7 +324,16 @@ happens-before edge between those paths, so the comparison feature can permanent
 
 **Fix:** `private volatile boolean completed;`
 
-### P1-3 ✅ Cancellation leaves the simulator in an inconsistent state
+#### ✅ Applied and verified
+
+The field is now `private volatile boolean completed = false;` with a comment naming both
+threads. **The suite does not catch this and cannot**: a missing `volatile` is a visibility bug,
+not a behavioural one, and every test here runs the simulation from one thread's point of view —
+removing `volatile` leaves all 490 tests green. The fix is justified by the Java memory model
+and by the read/write pairing above, not by a test. Recorded in the mutation table as *not
+caught* so nobody mistakes a green run for evidence.
+
+### P1-3 ✅ FIXED — cancellation leaves the simulator in an inconsistent state
 
 **File:** `src/Ic2ExpReactorPlanner/AutomationSimulator.java:318-321`
 
@@ -337,7 +347,37 @@ if (isCancelled()) {
 The early `return` skips `completed = true`, the `"completed"` property change that
 `ReactorPlannerFrame.java:1990` waits on, and the elapsed-time report.
 
+**⚠️ Correction, measured:** the property change is *not* something SwingWorker fires on our
+behalf. A headless probe of JDK 8 `SwingWorker` shows a run emits exactly three events —
+`state` (PENDING→RUNNING), our explicit `completed`, `state` (RUNNING→DONE) — and `publish()`
+emits nothing per tick. So the missing `firePropertyChange` really is ours, and `getData()`
+is the second half of the breakage: the GUI's listener does fire `updateComparison()`, which
+then bails at `simulator.getData() == null` (`ReactorPlannerFrame.java:2654`).
+
+**Second measured hazard:** cancelling a SwingWorker *before* its job has started skips
+`doInBackground` entirely — `isDone` goes true, `state` goes DONE, and no report line is ever
+written. `ReactorPlannerFrame` is safe today because both call sites (`:1967`, `:2110-2111`)
+cancel a simulator it has already checked is still running, but it is why the new test waits for
+the `RUNNING` event before cancelling rather than cancelling up front.
+
 **Fix:** set `completed = true` and fire the property change before returning.
+
+#### ✅ Applied and verified
+
+The cancel branch now sets `completed = true` and fires `"completed"` before its `return null`.
+The elapsed-time report is deliberately **not** added: a cancelled run has no meaningful
+simulation duration to report, and the fix scoped itself to the two state updates.
+
+1. **`AutomationSimulatorTest.Plumbing.cancelledRunStillCompletes`** starts a long run, waits for
+   the `state` event so the job is genuinely running, cancels, then asserts three things: the
+   `completed` event fires, the report contains the `Simulation.CancelledAtTick` line (this is
+   what proves the cancel branch was taken rather than the race being lost), and `getData()` is
+   non-null.
+2. **Corpus containment: 0 of 304 designs moved.** No corpus design is cancelled, so the change is
+   invisible to it — which is the point: this fix is about the exit path, not the arithmetic.
+3. **Both halves are pinned separately.** Reverting only `completed = true` fails the `getData()`
+   assertion; reverting only `firePropertyChange` fails the latch. A half-applied fix cannot slip
+   through.
 
 ---
 
@@ -659,7 +699,8 @@ design as safe".
 2. ~~**P1-1** code parsing~~ — **done and verified**; see above. Nothing skipped remains.
 3. **P2-1** `ImageIcon` caching — the only change users will actually perceive.
 4. **P2-2** flat component snapshot — measured −40 %, mechanical, self-contained.
-5. **P1-2 / P1-3** `volatile` + cancel path — two-line fixes.
+5. ~~**P1-2 / P1-3** `volatile` + cancel path~~ — **done and verified**; see above. The `volatile`
+   half is not test-observable, which is stated rather than hidden.
 6. **P1-4** decide the heat-unit divisor and make the total and the per-tick figures consistent.
 7. **P3 sweep** — delete the dead `GGFuelRod` fields and `needsCooldown`, fix the
    `DEFAULT_RESUME_TEMP` comparison and the stale `lastEUoutput`, narrow `catch (Throwable)`,
@@ -805,9 +846,9 @@ hand.
 **Known-bug handling.** For P0-2 the suite pins *current* behaviour in clearly named
 `Current…` tests and states the *intended* behaviour in `@Disabled` contract tests that
 reference this document. Fixing the bug flips them over: the characterisation tests fail, the
-contract tests pass, and the skipped count drops. **3 tests are currently skipped** — all of
-them `CondensatorTest.IntendedBound`, pending P0-2. P0-1 already went through this cycle, which
-is why `ExchangerTest` now has no `Current…` or `@Disabled` remnants.
+contract tests pass, and the skipped count drops. **0 tests are currently skipped** — the
+`CondensatorTest.IntendedBound` trio went live when P0-2 landed. P0-1 already went through this
+cycle, which is why `ExchangerTest` now has no `Current…` or `@Disabled` remnants.
 
 **Global static state.** `FuelRod.GT509behavior`, `Reflector.mcVersion`, the `MaterialsList`
 version flags and friends are process-wide. `TestSupport.resetGlobalConfig()` runs in both
@@ -822,9 +863,9 @@ reading the text. Any new test asserting on report text must do the same.
 ### Does it actually catch regressions?
 
 The suite was validated by mutation testing: 13 bugs injected into `src/` one at a time, with
-`src/` restored after each. **All 13 were caught.** Re-run after each fix, all were still caught; 21 further rows were
+`src/` restored after each. **All 13 were caught.** Re-run after each fix, all were still caught; 14 further rows were
 added as the fixes landed — single-tier partial reverts, the over-correction, four P0-2 variants,
-and the P1-1 parsing cases above. A full run takes about 20 seconds.
+the P1-1 parsing cases, and the P1-3 cancel-path cases. A full run takes about 20 seconds.
 
 | Injected bug | Result |
 |---|---|
@@ -851,6 +892,10 @@ and the P1-1 parsing cases above. A full run takes about 20 seconds.
 | P1-1: each of the 5 encodable-range checks removed | 5 x failed |
 | P1-1: revision guard / param-count refusal / reason removed | 3 x failed |
 | P1-1: base64 grid or currentHeat not applied, Talonius grid not applied | 3 x failed |
+| P1-3 reverted: cancel path skips both state updates | 1 failed |
+| P1-3 partial revert: only `completed = true` dropped | 1 failed (`getData()` assertion) |
+| P1-3 partial revert: only `firePropertyChange` dropped | 1 failed (latch) |
+| P1-2: `volatile` removed from `completed` | **not caught** — see P1-2, a green run is not evidence |
 
 ### Running the mutation checks
 
@@ -880,5 +925,8 @@ fails. Two practical warnings, both learned the hard way:
   generator over random byte strings is the natural way to close P1-1 off properly.
 * **No performance regression guard.** P2-1 and P2-2 were measured with a throwaway harness,
   not by a benchmark in the suite. If you want to keep the 40 % win, add one.
+* **`volatile` fixes are not test-observable.** P1-2 landed with no test that can fail against it;
+  the mutation table records that as *not caught*. A real guard would need a thread-sanitizer-style
+  harness or a deliberately slow interleaving, neither of which JUnit here provides.
 * **`TextureFactory` is only covered** by the fact that every component has a non-null image.
   The texture-pack fallback-name asymmetry in P3-8 needs a real pack to exercise.

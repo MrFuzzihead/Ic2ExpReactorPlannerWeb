@@ -790,6 +790,41 @@ class AutomationSimulatorTest {
             simulator.execute();
             assertTrue(latch.await(60, java.util.concurrent.TimeUnit.SECONDS), "completed was fired");
         }
+
+        @Test
+        @DisplayName("a cancelled run still completes and exposes its data")
+        void cancelledRunStillCompletes() throws Exception {
+            final java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
+            final java.util.concurrent.CountDownLatch finished = new java.util.concurrent.CountDownLatch(1);
+            Reactor simReactor = new Reactor();
+            simReactor.setCode(rodWithVent().getCode());
+            simReactor.setMaxSimulationTicks(5_000_000);
+            JTextArea output = new JTextArea(5, 20);
+            AutomationSimulator simulator =
+                    new AutomationSimulator(simReactor, output, newJPanelGrid(), null, -1);
+            simulator.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
+                @Override
+                public void propertyChange(java.beans.PropertyChangeEvent evt) {
+                    if ("state".equals(evt.getPropertyName())) {
+                        started.countDown();
+                    } else if ("completed".equals(evt.getPropertyName())) {
+                        finished.countDown();
+                    }
+                }
+            });
+            // SwingWorker skips doInBackground outright when it is cancelled before the job starts,
+            // so the cancel has to wait for the RUNNING event. That is also what the GUI does:
+            // ReactorPlannerFrame only ever cancels a simulator it knows is still running.
+            simulator.execute();
+            assertTrue(started.await(60, java.util.concurrent.TimeUnit.SECONDS), "the run started");
+            simulator.cancel(false);
+            assertTrue(finished.await(60, java.util.concurrent.TimeUnit.SECONDS), "completed was fired");
+            String report = output.getText();
+            String marker = BundleHelper.getI18n("Simulation.CancelledAtTick").split("%")[0];
+            assertTrue(report.contains(marker), "the cancel branch ran: " + report);
+            org.junit.jupiter.api.Assertions.assertNotNull(
+                    simulator.getData(), "a cancelled run is a finished run, so getData() is available");
+        }
     }
 
     /** Drops the wall-clock line, which is the only legitimately variable part of a report. */

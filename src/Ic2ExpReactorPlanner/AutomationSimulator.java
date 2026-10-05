@@ -89,7 +89,10 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
 
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat(getI18n("Simulation.DecimalFormat"));
 
-    private boolean completed = false;
+    // Written on the SwingWorker thread in doInBackground and read on the EDT via getData()
+    // from arbitrary UI events, so it needs volatile: without it there is no happens-before edge
+    // between the two paths and the comparison feature can permanently observe null.
+    private volatile boolean completed = false;
 
     private final SimulationData data = new SimulationData();
 
@@ -308,6 +311,11 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             }
             if (isCancelled()) {
                 publish(formatI18n("Simulation.CancelledAtTick", reactorTicks));
+                // A cancelled run is still a finished run. The GUI waits on the "completed" property
+                // change and then reads getData(), so both must happen on this exit path too; skipping
+                // them leaves the simulator in a state where the comparison view never updates.
+                completed = true;
+                firePropertyChange("completed", null, true);
                 return null;
             }
             data.minTemp = minReactorHeat;

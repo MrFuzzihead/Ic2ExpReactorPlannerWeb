@@ -204,9 +204,9 @@ public final class CorpusRunner {
      *
      * <p>Note how completion is detected: the {@code completed} property change is awaited via a
      * latch rather than reading {@code AutomationSimulator.getData()} after {@code get()}. That
-     * is deliberate — {@code completed} is a non-volatile field (CODE_REVIEW.md P1-2), so reading
-     * it from this thread has no happens-before edge with the worker. The latch provides a real
-     * one, which makes the corpus correct today and stays correct after P1-2 is fixed.
+     * is deliberate — {@code completed} is now volatile (CODE_REVIEW.md P1-2, fixed), but the latch
+     * gives a real happens-before edge either way and does not depend on that fix, so the corpus
+     * reads the same before and after it.
      */
     public static Result run(Corpus.Design design) throws Exception {
         FuelRod.setGT509Behavior(design.gt509);
