@@ -12,7 +12,6 @@ import Ic2ExpReactorPlanner.TestSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -22,15 +21,17 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * {@link Condensator} (RSH / LZH) absorption and Reactor Coolant Injector interaction.
  *
- * <p><b>Known bug (CODE_REVIEW.md P0-2).</b> The absorption bound is
- * {@code min(heat, maxHeat - heat)} where it should be {@code min(heat, maxHeat - currentHeat)}.
- * The two agree only while {@code currentHeat == heat}; once a single packet exceeds half the
- * condensator's capacity the bound goes <i>negative</i> and {@code currentHeat} is driven below
- * zero. The largest packet any fuel rod can emit is 29 568 heat (pinned in {@code FuelRodTest}),
- * which overflows the 20 000 RSH but not the 100 000 LZH.
+ * <p><b>Fixed (CODE_REVIEW.md P0-2, P3-18).</b> The absorption bound used to be
+ * {@code min(heat, maxHeat - heat)}, which ignored {@code currentHeat}. The consequences were
+ * that a partly-full condensator under-accepted, a packet larger than the capacity drove
+ * {@code currentHeat} negative, and -- because {@code FuelRod.handleHeat} discards the return
+ * value -- the rod's entire heat output was silently deleted from the reactor. The bound is now
+ * {@code min(heat, maxHeat - currentHeat)}, and the reported cooling counts what was absorbed
+ * rather than what was offered.
  *
- * <p>The characterisation tests pin today's behaviour so a refactor cannot silently move it; the
- * disabled contract test states the behaviour the code is supposed to have.
+ * <p>The table below is the spec. {@code refused} is the method's return value, which is
+ * <i>positive</i> here, the opposite sign to the base class's convention; that asymmetry is
+ * preserved deliberately and is noted in the implementation.
  */
 class CondensatorTest {
 
@@ -61,133 +62,168 @@ class CondensatorTest {
         assertFalse(rsh.isCoolable(), "must not be coolable, unlike a coolant cell");
     }
 
-    @Test
-    @DisplayName("accepts a normal packet in full")
-    void acceptsNormalPacket() {
-        Condensator c = condensator("rshCondensator");
-        double rejected = c.adjustCurrentHeat(4000);
-        assertClose(0, rejected, 1e-9, "nothing rejected");
-        assertClose(4000, c.getCurrentHeat(), 1e-9, "stored");
-    }
-
-    @Test
-    @DisplayName("repeated small packets all land, well past the point where heat > maxHeat/2")
-    void repeatedSmallPacketsAreAllAccepted() {
-        Condensator c = condensator("rshCondensator");
-        for (int i = 0; i < 10; i++) {
-            assertClose(0, c.adjustCurrentHeat(4000), 1e-9, "packet " + i + " rejected nothing");
-        }
-        assertClose(40000, c.getCurrentHeat(), 1e-9, "all 40 000 stored");
-    }
-
-    // ------------------------------------------------------------------ current behaviour
+    // ------------------------------------------------------------------ the absorption table
 
     @Nested
-    @DisplayName("current behaviour of the absorption bound")
-    class CurrentBound {
+    @DisplayName("absorption bound")
+    class AbsorptionBound {
 
-        @Test
-        @DisplayName("a packet of exactly half the capacity is accepted in full")
-        void halfCapacityAccepted() {
+        /**
+         * A fresh RSH (capacity 20 000) absorbing a single packet. The third and fourth rows are
+         * the ones the old bound got wrong: it refused everything above half the capacity, and
+         * returned a <i>negative</i> "accepted" amount for a packet over the capacity.
+         */
+        @ParameterizedTest(name = "packet {0}: accepts {1}, refuses {2}, stores {3}")
+        @CsvSource({
+            // packet, accepted, refused, currentHeat
+            "4000,     4000,     0,      4000",
+            "10000,    10000,    0,      10000",
+            "20000,    20000,    0,      20000",  // exactly full
+            "29568,    20000,    9568,   20000",  // over capacity: fills, refuses the excess
+            "40000,    20000,    20000,  20000",
+        })
+        @DisplayName("a fresh RSH absorbs up to its remaining room")
+        void freshRsh(double packet, double accepted, double refused, double expectedHeat) {
             Condensator c = condensator("rshCondensator");
-            assertClose(0, c.adjustCurrentHeat(10000), 1e-9, "nothing rejected");
-            assertClose(10000, c.getCurrentHeat(), 1e-9, "stored");
+            assertClose(refused, c.adjustCurrentHeat(packet), 1e-9, "refused for a packet of " + packet);
+            assertClose(expectedHeat, c.getCurrentHeat(), 1e-9, "stored for a packet of " + packet);
         }
 
         @Test
-        @DisplayName("a packet equal to the whole capacity stores nothing")
-        void fullCapacityStoresNothing() {
-            // min(20000, 20000 - 20000) = 0. The correct bound would accept all 20 000.
+        @DisplayName("a warm condensator absorbs exactly its remaining room")
+        void warmAbsorbsRemainingRoom() {
             Condensator c = condensator("rshCondensator");
-            assertClose(20000, c.adjustCurrentHeat(20000), 1e-9, "everything rejected");
-            assertClose(0, c.getCurrentHeat(), 1e-9, "nothing stored");
-        }
+            assertClose(0, c.adjustCurrentHeat(15000), 1e-9, "precondition: nothing refused");
+            assertClose(15000, c.getCurrentHeat(), 1e-9, "precondition: stored");
 
-        @Test
-        @DisplayName("a packet above the capacity drives currentHeat NEGATIVE")
-        void oversizedPacketGoesNegative() {
-            // 29 568 is the largest packet any rod emits; min(29568, 20000 - 29568) = -9568.
-            Condensator c = condensator("rshCondensator");
-            double rejected = c.adjustCurrentHeat(29568);
-            assertClose(-9568, c.getCurrentHeat(), 1e-9, "heat went negative");
-            assertClose(29568 - (-9568), rejected, 1e-9, "the caller is charged 39 136 for a 29 568 packet");
-        }
-
-        @Test
-        @DisplayName("the LZH is large enough that no rod packet can trigger the bad branch")
-        void lzhIsUnaffected() {
-            // half of 100 000 is 50 000, above the 29 568 maximum packet, so the bound is
-            // always the non-negative maxHeat - heat.
-            Condensator c = condensator("lzhCondensator");
-            assertClose(0, c.adjustCurrentHeat(29568), 1e-9, "nothing rejected");
-            assertClose(29568, c.getCurrentHeat(), 1e-9, "stored in full");
-        }
-
-        @Test
-        @DisplayName("negative heat is always refused outright")
-        void refusesCooling() {
-            Condensator c = condensator("rshCondensator");
-            c.adjustCurrentHeat(5000);
-            assertClose(-1000, c.adjustCurrentHeat(-1000), 1e-9, "the -1000 is passed straight back");
-            assertClose(5000, c.getCurrentHeat(), 1e-9, "unchanged");
-        }
-    }
-
-    // ------------------------------------------------------------------ contract (P0-2)
-
-    @Nested
-    @Disabled("CODE_REVIEW.md P0-2: the absorption bound must be maxHeat - currentHeat, not maxHeat - heat")
-    @DisplayName("intended behaviour of the absorption bound")
-    class IntendedBound {
-
-        @ParameterizedTest(name = "a fresh RSH accepts a {0} heat packet in full")
-        @ValueSource(doubles = {4000, 10000, 20000, 29568})
-        void freshCondensatorAcceptsUpToCapacity(double packet) {
-            Condensator c = condensator("rshCondensator");
-            assertClose(0, c.adjustCurrentHeat(packet), 1e-9, "nothing rejected while empty");
-            assertClose(packet, c.getCurrentHeat(), 1e-9, "stored in full");
-        }
-
-        @Test
-        @DisplayName("a warm condensator accepts exactly its remaining room")
-        void warmCondensatorAcceptsRemainingRoom() {
-            Condensator c = condensator("rshCondensator");
-            c.adjustCurrentHeat(15000);
-            assertClose(15000, c.getCurrentHeat(), 1e-9, "precondition");
-            assertClose(5000, c.adjustCurrentHeat(15000), 1e-9, "only 5 000 of room left");
+            assertClose(10000, c.adjustCurrentHeat(15000), 1e-9, "only 5 000 of room was left");
             assertClose(20000, c.getCurrentHeat(), 1e-9, "filled to capacity, never above");
         }
 
         @Test
-        @DisplayName("currentHeat never goes negative")
-        void neverGoesNegative() {
+        @DisplayName("a full condensator refuses everything further and stores nothing")
+        void fullCondensatorRefusesEverything() {
             Condensator c = condensator("rshCondensator");
-            for (double packet : new double[] {29568, 29568, 29568, 29568, 29568}) {
-                c.adjustCurrentHeat(packet);
-                assertTrue(c.getCurrentHeat() >= 0, "heat stayed non-negative: " + c.getCurrentHeat());
-                assertTrue(c.getCurrentHeat() <= c.getMaxHeat(), "heat stayed within capacity");
+            c.adjustCurrentHeat(20000);
+            assertClose(20000, c.getCurrentHeat(), 1e-9, "precondition: full");
+
+            for (double packet : new double[] {100, 4000, 29568}) {
+                assertClose(packet, c.adjustCurrentHeat(packet), 1e-9, "all of " + packet + " refused");
+                assertClose(20000, c.getCurrentHeat(), 1e-9, "still exactly at capacity");
             }
         }
 
         @Test
-        @DisplayName("an over-capacity packet is charged as rejected, not as a negative transfer")
-        void overCapacityIsRejectedNotNegative() {
+        @DisplayName("currentHeat stays within [0, maxHeat] under repeated over-capacity packets")
+        void neverGoesNegativeOrOverCapacity() {
             Condensator c = condensator("rshCondensator");
-            double rejected = c.adjustCurrentHeat(29568);
-            assertClose(29568, rejected, 1e-9, "the whole packet is rejected");
-            assertClose(0, c.getCurrentHeat(), 1e-9, "nothing stored");
+            for (int i = 0; i < 5; i++) {
+                c.adjustCurrentHeat(29568);
+                assertTrue(c.getCurrentHeat() >= 0, "never negative: " + c.getCurrentHeat());
+                assertTrue(
+                        c.getCurrentHeat() <= c.getMaxHeat(),
+                        "never over capacity: " + c.getCurrentHeat() + " > " + c.getMaxHeat());
+            }
+            assertClose(20000, c.getCurrentHeat(), 1e-9, "sits exactly at capacity");
+        }
+
+        /**
+         * The old bound was only ever wrong for a packet above half the capacity, so the LZH
+         * (capacity 100 000) was immune to it in practice: the largest packet any rod emits is
+         * 29 568 (pinned in FuelRodTest.maximumSinglePacketHeat).
+         */
+        @Test
+        @DisplayName("the LZH absorbs every packet the game can produce")
+        void lzhAbsorbsEveryReachablePacket() {
+            Condensator c = condensator("lzhCondensator");
+            for (int i = 0; i < 3; i++) {
+                assertClose(0, c.adjustCurrentHeat(29568), 1e-9, "nothing refused");
+            }
+            assertClose(3 * 29568.0, c.getCurrentHeat(), 1e-9, "all of it stored");
+        }
+
+        @Test
+        @DisplayName("negative heat is always refused outright and never stored")
+        void coolingIsAlwaysRefused() {
+            Condensator c = condensator("rshCondensator");
+            c.adjustCurrentHeat(5000);
+            assertClose(5000, c.getCurrentCondensatorCooling(), 1e-9, "precondition: 5 000 absorbed");
+
+            assertClose(-1000, c.adjustCurrentHeat(-1000), 1e-9, "the -1000 is passed straight back");
+            assertClose(5000, c.getCurrentHeat(), 1e-9, "a condensator cannot be cooled");
+            assertClose(
+                    5000,
+                    c.getCurrentCondensatorCooling(),
+                    1e-9,
+                    "and the refused cooling did not raise the absorbed-heat counter");
+        }
+
+        @Test
+        @DisplayName("small packets accumulate without loss up to capacity")
+        void smallPacketsAccumulate() {
+            Condensator c = condensator("rshCondensator");
+            for (int i = 0; i < 5; i++) {
+                assertClose(0, c.adjustCurrentHeat(4000), 1e-9, "packet " + i + " refused nothing");
+            }
+            assertClose(20000, c.getCurrentHeat(), 1e-9, "all 5 x 4 000 stored, exactly full");
+            assertTrue(c.isBroken(), "which means it is now broken");
+            assertClose(4000, c.adjustCurrentHeat(4000), 1e-9, "and the next packet is fully refused");
         }
     }
 
-    // ------------------------------------------------------------------ RCI behaviour
+    // ------------------------------------------------------------------ reported cooling
+
+    @Nested
+    @DisplayName("reported cooling")
+    class ReportedCooling {
+
+        @Test
+        @DisplayName("bestCondensatorCooling tracks the peak heat absorbed within a tick")
+        void bestTracksThePeak() {
+            Reactor reactor = new Reactor();
+            Condensator c = (Condensator) place(reactor, 2, 2, "rshCondensator");
+            c.preReactorTick();
+            c.adjustCurrentHeat(300);
+            c.adjustCurrentHeat(900);
+            assertClose(1200, c.getCurrentCondensatorCooling(), 1e-9, "this tick so far");
+            assertClose(1200, c.getBestCondensatorCooling(), 1e-9, "and that is the peak");
+
+            c.preReactorTick();
+            assertClose(0, c.getCurrentCondensatorCooling(), 1e-9, "reset each tick");
+            c.adjustCurrentHeat(100);
+            assertClose(1200, c.getBestCondensatorCooling(), 1e-9, "peak unchanged");
+        }
+
+        /**
+         * P3-18. The old code added the <i>offered</i> heat to the counter, so a nearly-full
+         * condensator reported full credit for heat it then refused. The counter now tracks what
+         * was actually absorbed, so it can never exceed the heat the condensator really took.
+         */
+        @Test
+        @DisplayName("the reported cooling never exceeds the heat actually stored")
+        void coolingNeverExceedsWhatWasStored() {
+            Condensator c = condensator("rshCondensator");
+            c.preReactorTick();
+            c.adjustCurrentHeat(10000); // stored in full
+            c.adjustCurrentHeat(19000); // only 10 000 of room left
+            assertClose(20000, c.getCurrentHeat(), 1e-9, "20 000 was stored in total");
+            assertClose(
+                    20000,
+                    c.getCurrentCondensatorCooling(),
+                    1e-9,
+                    "and the reported cooling matches it, not the 29 000 offered");
+        }
+    }
+
+    // ------------------------------------------------------------------ RCI
 
     @Nested
     @DisplayName("reactor coolant injectors")
     class CoolantInjectors {
 
         /**
-         * Two 10 000 packets fill an RSH exactly, because 10 000 is the largest packet the
-         * current bound stores whole (at that size {@code maxHeat - heat == heat}).
+         * Two 10 000 packets fill an RSH exactly, which is also the point at which it trips the
+         * injector threshold.
          */
         private Condensator fullRsh() {
             Condensator c = condensator("rshCondensator");
@@ -218,6 +254,15 @@ class CondensatorTest {
         }
 
         @Test
+        @DisplayName("an emptied condensator can absorb again")
+        void emptiedCondensatorCanAbsorbAgain() {
+            Condensator c = fullRsh();
+            c.injectCoolant();
+            assertClose(0, c.adjustCurrentHeat(5000), 1e-9, "nothing refused after emptying");
+            assertClose(5000, c.getCurrentHeat(), 1e-9, "and it stores again");
+        }
+
+        @Test
         @DisplayName("maxReachedHeat remembers the high-water mark across an injection")
         void maxReachedHeatSurvivesInjection() {
             Condensator c = fullRsh();
@@ -226,45 +271,10 @@ class CondensatorTest {
         }
     }
 
-    // ------------------------------------------------------------------ reporting
-
     @Test
-    @DisplayName("bestCondensatorCooling accumulates the heat offered during a tick")
-    void bestCondensatorCooling() {
-        Reactor reactor = new Reactor();
-        Condensator c = (Condensator) place(reactor, 2, 2, "rshCondensator");
-        c.preReactorTick();
-        c.adjustCurrentHeat(300);
-        c.adjustCurrentHeat(900);
-        // 300 and 900 are both under half the capacity, so both are stored whole and the
-        // offered total happens to equal the stored total.
-        assertClose(1200, c.getCurrentCondensatorCooling(), 1e-9, "offered this tick");
-        assertClose(1200, c.getBestCondensatorCooling(), 1e-9, "and that is the peak");
-
-        c.preReactorTick();
-        assertClose(0, c.getCurrentCondensatorCooling(), 1e-9, "reset each tick");
-        c.adjustCurrentHeat(100);
-        assertClose(1200, c.getBestCondensatorCooling(), 1e-9, "peak unchanged");
-    }
-
-    @Test
-    @DisplayName("currentCondensatorCooling counts heat OFFERED, not heat accepted")
-    void coolingMetricCountsOfferedHeat() {
-        // A second consequence of the P0-2 bound: the reported "received heat" is the amount
-        // pushed at the condensator, so a nearly-full condensator still reports full credit for
-        // heat it then refuses. Pin it so the fix has to be a conscious decision.
-        Condensator c = condensator("rshCondensator");
-        c.preReactorTick();
-        c.adjustCurrentHeat(10000); // stored 10 000
-        c.adjustCurrentHeat(19000); // min(19000, 20000-19000) = 1000 stored, 18 000 refused
-        assertClose(29000, c.getCurrentCondensatorCooling(), 1e-9, "reported cooling is the offered total");
-        assertClose(11000, c.getCurrentHeat(), 1e-9, "but only 11 000 was actually stored");
-    }
-
-    @ParameterizedTest(name = "{0} tooltip reports its capacity")
-    @CsvSource({"rshCondensator", "lzhCondensator"})
-    @DisplayName("tooltip reports the capacity")
-    void tooltip(String name) {
-        assertEquals(1, condensator(name).formatTooltip().length, name);
+    @DisplayName("the tooltip reports the capacity")
+    void tooltipReportsCapacity() {
+        assertEquals(1, condensator("rshCondensator").formatTooltip().length, "rsh");
+        assertEquals(1, condensator("lzhCondensator").formatTooltip().length, "lzh");
     }
 }

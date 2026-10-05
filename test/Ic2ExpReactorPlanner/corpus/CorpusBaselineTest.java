@@ -152,17 +152,24 @@ class CorpusBaselineTest {
     @Order(4)
     @DisplayName("the P0-2 corpus designs still reach the intended heat-packet regimes")
     void condensatorPacketsReachEveryRegime() throws Exception {
-        // RSH holds 20 000, so the interesting boundaries are 10 000 (overfill starts) and
-        // 20 000 (the negative mode). These are the packet sizes the named designs rely on.
+        // RSH holds 20 000, so the interesting boundaries are 10 000 (the old bound started
+        // refusing) and 20 000 (the old bound went negative). These are the packet sizes the
+        // named designs rely on, and they are properties of the rods, not the condensator, so
+        // they are unchanged by P0-2.
         assertEquals(4, (int) packetFor("named-condensator-small"), "bare rod");
         assertEquals(336, (int) packetFor("named-condensator-overfill"), "quad uranium, 3 reflectors");
         assertEquals(5376, (int) packetFor("named-condensator-overfill-big"), "quad liquid uranium");
         assertEquals(26880, (int) packetFor("named-condensator-over-capacity"), "The Core exceeds the RSH capacity");
 
-        // And confirm the regimes are actually reached by a live simulation, because that is the
-        // property P0-2 is about.
-        assertOverfills("named-condensator-overfill", true);
-        assertGoesNegative("named-condensator-over-capacity", true);
+        // The invariant P0-2 restores, checked by live simulation in every regime. Before the fix
+        // the first of these overshot its capacity and the last went negative; both assertions
+        // were inverted, because pinning the bug is the failure mode this suite guards against.
+        assertStaysWithinCapacity("named-condensator-small");
+        assertStaysWithinCapacity("named-condensator-overfill");
+        assertStaysWithinCapacity("named-condensator-overfill-big");
+        assertStaysWithinCapacity("named-condensator-over-capacity");
+        assertStaysWithinCapacity("named-lzh-overfill");
+        assertStaysWithinCapacity("named-lzh-small");
     }
 
     /**
@@ -230,24 +237,16 @@ class CorpusBaselineTest {
         throw new IllegalStateException(id + " has no exchanger");
     }
 
-    /** Runs one design and inspects the condensator's final heat against its capacity. */
-    private static void assertOverfills(String id, boolean expected) throws Exception {
+    /**
+     * Asserts a condensator's heat stayed inside {@code [0, maxHeat]} through a whole run, in
+     * whichever packet regime the design exercises. This is the property P0-2 broke: the old
+     * bound overfilled a partly-full condensator and drove a full one negative.
+     */
+    private static void assertStaysWithinCapacity(String id) throws Exception {
         double maxHeat = condMax(id);
         double seen = condHeatAfterRun(id);
-        if (expected) {
-            assertTrue(seen > maxHeat, id + " should have overshot its capacity, but topped out at " + seen);
-        } else {
-            assertTrue(seen <= maxHeat, id + " should not have overshot, but reached " + seen);
-        }
-    }
-
-    private static void assertGoesNegative(String id, boolean expected) throws Exception {
-        double seen = condHeatAfterRun(id);
-        if (expected) {
-            assertTrue(seen < 0, id + " should have gone negative, but read " + seen);
-        } else {
-            assertTrue(seen >= 0, id + " should not have gone negative, but read " + seen);
-        }
+        assertTrue(seen >= 0, id + " ended at " + seen + ", which is negative");
+        assertTrue(seen <= maxHeat, id + " ended at " + seen + ", above its capacity of " + maxHeat);
     }
 
     /** Re-runs a design and reads the condensator heat left behind at the end of the run. */

@@ -16,25 +16,25 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 
 |                                              | Count |
 |----------------------------------------------|-------|
-| P0 — wrong simulation results                | 2 (1 fixed) |
+| P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4     |
 | P2 — performance                             | 2     |
-| P3 — dead code, correctness-adjacent cleanup | 18    |
+| P3 — dead code, correctness-adjacent cleanup | 17 (1 fixed) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **473** |
+| **Covered by an automated regression test**  | **474** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
 is leak-free). The genuinely dangerous problems are two wrong-heat-transfer formulas in
 `Exchanger`/`Condensator`, and unvalidated legacy-code parsing that can crash the GUI.
 
-**A 473-test regression suite and a 304-design simulation corpus now exist** so that the fixes
+**A 474-test regression suite and a 304-design simulation corpus now exist** so that the fixes
 above can be made safely; see [Testing](#testing) at the end. Building them also surfaced six
 further findings, marked **🆕** below, and escalated P0-2 from a rounding error into a
 silently-wrong safety verdict.
 
-**Status:** P0-1 `Exchanger` — **fixed and verified**. P0-2 `Condensator` — open, and now the
-more urgent of the two.
+**Status:** P0-1 `Exchanger` — **fixed and verified**. P0-2 `Condensator` and P3-18 — **fixed
+and verified**. Both P0s are closed, and no test in the suite is skipped.
 
 ---
 
@@ -120,7 +120,7 @@ to make an aggregate tidier.
 
 ---
 
-### P0-2 ✅⚠️ `Condensator.adjustCurrentHeat()` — absorption bound uses the wrong term, and can drive heat **negative**
+### P0-2 ✅ FIXED — `Condensator.adjustCurrentHeat()` — the absorption bound ignored `currentHeat`
 
 **File:** `src/Ic2ExpReactorPlanner/components/Condensator.java:40`
 
@@ -202,6 +202,44 @@ together with P3-18.
 So the migration impact on published designs is far smaller than feared — but the one case it
 does hit is a design class that is currently *misreported as safe*, which makes it worth a
 release note rather than a silent patch.
+
+#### ✅ Applied and verified
+
+The bound is now `Math.min(heat, getMaxHeat() - currentHeat)`, and the absorbed-heat counter
+(P3-18) accumulates the accepted amount rather than the offered one. Both in one commit, because
+they are the same ten lines and fixing only the bound would leave the reporting wrong.
+
+1. **The absorption table is exact.** `CondensatorTest.AbsorptionBound` asserts packet, accepted,
+   refused and stored for 4 000 / 10 000 / 20 000 / 29 568 / 40 000 into a fresh RSH, plus a warm
+   condensator, a full one, the LZH, and repeated over-capacity packets.
+2. **The invariant is restored.** `neverGoesNegativeOrOverCapacity` hammers a condensator with five
+   29 568 packets and asserts `0 <= currentHeat <= maxHeat` throughout; it ends exactly at 20 000.
+   The corpus self-check asserts the same across all six condensator designs by live simulation.
+3. **Corpus containment.** Exactly **1 of 304** designs moved, tagged `condensator`, and its
+   `timeToXplode` went from "never" to **2** — the prediction held. 303 byte-identical.
+4. **Reported cooling now matches reality.** `coolingNeverExceedsWhatWasStored` absorbs
+   10 000 + 19 000 into a 20 000 RSH and asserts the counter reads 20 000, not the 29 000 offered.
+
+**Two of the four contract tests I wrote were wrong** and had to be corrected before the fix could
+land. I had conflated "accepts up to capacity" with "accepts in full", so two of them asserted
+that a 29 568 packet should be stored whole in a 20 000 RSH, and that an over-capacity packet
+should be rejected outright. Both are unachievable: a condensator should fill to capacity and
+refuse only the excess. They had sat `@Disabled` since Phase 0, which is precisely the risk a
+disabled test carries — it is an unverified claim. **Run a disabled spec against the current
+code before you trust its numbers**, even knowing it is expected to fail.
+
+**The corpus self-check was pinning the bug too.** `condensatorPacketsReachEveryRegime` asserted
+that a condensator *overfilled* and *went negative* — accurate descriptions of the bug, wrong as
+a specification. Both assertions were inverted to check the restored invariant. The packet-size
+assertions were kept, since those are properties of the rods.
+
+**Deliberately not changed:** the method returns the *positive* amount refused, the opposite sign
+to `ReactorItem.adjustCurrentHeat`'s negative-for-refused convention. No caller reads it (the only
+callers for a condensator are `FuelRod.handleHeat` and `Exchanger.transfer`, both of which
+discard it), so changing it would be an unrelated behaviour change. The asymmetry is now
+documented in the implementation.
+
+**Skipped test count: 3 → 0.** No test in the suite is skipped.
 
 ---
 
@@ -524,14 +562,14 @@ rods; the six non-mox variants all carry 0. If the per-rod bonus is meant to be 
 modifier, the override needs to compose with the global one instead of replacing it.
 Pinned by `PassiveComponentsTest.GGFuelRods`.
 
-### P3-18 ✅🆕 `currentCondensatorCooling` counts heat *offered*, not heat accepted
+### P3-18 ✅ FIXED (with P0-2) 🆕 `currentCondensatorCooling` counted heat *offered*, not accepted
 
 A second, reporting-side consequence of P0-2: `Condensator.adjustCurrentHeat` adds the requested
 heat to `currentCondensatorCooling` *before* working out how much it can take, so a nearly-full
 condensator reports full credit for heat it then refuses. Measured: after 10 000 + 19 000 into an
 RSH it reports 29 000 of "received heat" while only 11 000 was stored. Fixing P0-2 does **not**
 fix this; the accumulation needs to move after the acceptance is computed.
-Pinned by `CondensatorTest.coolingMetricCountsOfferedHeat`.
+Pinned by `CondensatorTest.coolingNeverExceedsWhatWasStored`.
 
 ### P3-19 ✅🆕 `SimulationData`'s output totals are only filled in for non-exploding runs
 
@@ -578,28 +616,23 @@ design as safe".
 
 ## Recommended order of work
 
-1. ~~**P0-1** `Exchanger`~~ — **done**, see above. Nothing left to do.
-2. **P0-2** `Condensator` — the next thing to do, and now the more urgent of the two. See the
-   escalation note above: this is not a one-line change. Read `CondensatorTest.IntendedBound`
-   first; its 3 tests are `@Disabled` and should pass once you land the fix, dropping the
-   skipped count to 0. Land P3-18 in the same commit. The corpus should report **exactly 1
-   changed design, `named-condensator-over-capacity`**, whose `timeToXplode` should go from
-   "never" to 2. Any other diff means you have changed more than you meant to.
-3. **P1-1** legacy-code validation — turns paste-and-crash into paste-and-warn. The tests under
+1. ~~**P0-1** `Exchanger`~~ and ~~**P0-2** `Condensator`~~ — **both done and verified**; see
+   their sections above. No test in the suite is skipped any more.
+2. **P1-1** legacy-code validation — turns paste-and-crash into paste-and-warn. The tests under
    `ReactorCodeSerializationTest.Malformed` currently assert the *crashing* behaviour and need
    inverting to `assertDoesNotThrow` once it is fixed.
-4. **P2-1** `ImageIcon` caching — the only change users will actually perceive.
-5. **P2-2** flat component snapshot — measured −40 %, mechanical, self-contained.
-6. **P1-2 / P1-3** `volatile` + cancel path — two-line fixes.
-7. **P1-4** decide the heat-unit divisor and make the total and the per-tick figures consistent.
-8. **P3 sweep** — delete the dead `GGFuelRod` fields and `needsCooldown`, fix the
+3. **P2-1** `ImageIcon` caching — the only change users will actually perceive.
+4. **P2-2** flat component snapshot — measured −40 %, mechanical, self-contained.
+5. **P1-2 / P1-3** `volatile` + cancel path — two-line fixes.
+6. **P1-4** decide the heat-unit divisor and make the total and the per-tick figures consistent.
+7. **P3 sweep** — delete the dead `GGFuelRod` fields and `needsCooldown`, fix the
    `DEFAULT_RESUME_TEMP` comparison and the stale `lastEUoutput`, narrow `catch (Throwable)`,
    precompile the `process()` regex, hoist the CSV bundle keys, tidy `plannerResized`, and add
    the `parent` null guard in `Vent.getVentCoolingCapacity()`.
 
 ## Testing
 
-A 473-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 474-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -739,9 +772,9 @@ reading the text. Any new test asserting on report text must do the same.
 ### Does it actually catch regressions?
 
 The suite was validated by mutation testing: 13 bugs injected into `src/` one at a time, with
-`src/` restored after each. **All 13 were caught.** Re-run after the P0-1 fix, all were still caught, and three
-additional single-tier partial reverts of P0-1 plus one over-correction (switching the *side*
-block too) were added as new rows. A full run takes about 20 seconds.
+`src/` restored after each. **All 13 were caught.** Re-run after each P0 fix, all were still caught; nine further rows
+(single-tier partial reverts, the over-correction, and four P0-2 variants) were added as the fixes
+landed. A full run takes about 20 seconds.
 
 | Injected bug | Result |
 |---|---|
@@ -760,6 +793,10 @@ block too) were added as new rows. A full run takes about 20 seconds.
 | `BigintStorage.extract`: `max + 1` → `max` | 59 failed |
 | P0-1 revert: any single cascade tier back to `switchSide` | 3 × failed |
 | P0-1 over-correction: the *side* block switched too | failed |
+| P0-2 reverted to the old bound | failed |
+| P0-2 P3-18 reverted (counts offered heat) | failed |
+| P0-2 clamp dropped entirely | failed |
+| P0-2 no-op (absorbs nothing) | failed |
 
 ### Running the mutation checks
 
