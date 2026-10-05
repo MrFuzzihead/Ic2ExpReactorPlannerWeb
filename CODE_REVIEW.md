@@ -17,23 +17,23 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 |                                              | Count |
 |----------------------------------------------|-------|
 | P0 — wrong simulation results                | 2 (both fixed) |
-| P1 — crashes / data races                    | 4     |
+| P1 — crashes / data races                    | 4 (1 fixed) |
 | P2 — performance                             | 2     |
 | P3 — dead code, correctness-adjacent cleanup | 17 (2 fixed) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **483** |
+| **Covered by an automated regression test**  | **489** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
 is leak-free). The genuinely dangerous problems are two wrong-heat-transfer formulas in
 `Exchanger`/`Condensator`, and unvalidated legacy-code parsing that can crash the GUI.
 
-**A 483-test regression suite and a 304-design simulation corpus now exist** so that the fixes
+**A 489-test regression suite and a 304-design simulation corpus now exist** so that the fixes
 above can be made safely; see [Testing](#testing) at the end. Building them also surfaced six
 further findings, marked **🆕** below, and escalated P0-2 from a rounding error into a
 silently-wrong safety verdict.
 
-**Status:** P0-1 `Exchanger` — **fixed and verified**. P0-2 `Condensator` and P3-18 — **fixed
+**Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, and P3-10 — **all fixed
 and verified**. Both P0s are closed, and no test in the suite is skipped.
 
 ---
@@ -245,33 +245,67 @@ documented in the implementation.
 
 ## P1 — Crashes and data races
 
-### P1-1 ✅ Legacy hex-code parsing has no bounds validation (3 reproduced crash paths)
+### P1-1 ✅ FIXED — code parsing was neither crash-safe nor all-or-nothing
 
-**File:** `src/Ic2ExpReactorPlanner/Reactor.java:225-300`
+`setCode()` only caught `NumberFormatException`, so several failure modes escaped as unchecked
+exceptions, and a short suffix could leave the grid *applied* with half the mode flags set.
 
-`setCode()` only catches `NumberFormatException`, but three other failure modes escape:
+**Originally reproduced, in three ways:**
 
 1. **More than 3 parameters per cell** → `paramNum` indexes `paramTypes[row][col][3]`
    with no check against `MAX_PARAM_TYPES`.
-   Reproduced: `01(h1,a2,p3,h4)…|fes` → `ArrayIndexOutOfBoundsException`.
-2. **Short `|xxx` suffix** → `extraCode.charAt(1)` / `charAt(2)` read unconditionally.
-   Reproduced: `00…00|f` → `StringIndexOutOfBoundsException`.
-3. **Unclamped `currentHeat` exceeding the 120 000 storage bound** →
-   `Integer.parseInt(extraCode.substring(3), 36)` has no upper clamp, so
-   `buildCodeString()`'s `storage.store((int) currentHeat, (int) 120e3)` throws on the very
-   next `updateCodeField()`.
-   Reproduced: `00…00|fes3W0E` → `currentHeat = 181 454` → `getCode()` throws
-   `IllegalArgumentException` from `BigintStorage.store`.
+   `01(h1,a2,p3,h4)…|fes` → `ArrayIndexOutOfBoundsException`.
+2. **Short `|xxx` suffix** → `extraCode.charAt(1)` / `charAt(2)` read unconditionally, and read
+   *after* the grid had been applied. `00…00|f` → `StringIndexOutOfBoundsException` with the
+   grid already loaded.
+3. **Unclamped `currentHeat` above the 120 000 storage bound** → parsed without limit, so
+   `buildCodeString()`'s `storage.store` threw on the *next* `getCode()`.
+   `00…00|fes3W0E` → `currentHeat = 181 454` → `getCode()` throws.
+   Reachable only by pasting a code — the heat-spinner ceiling is 101 799, measured.
+4. **Unsupported code revision** → `readCodeString` threw `IllegalArgumentException` straight
+   out of the public `setCode`.
 
-**Note on scope:** the heat-spinner maximum is `reactor.getMaxHeat() - 1`, and I measured
-the UI-reachable ceiling at **101 799** (all 54 cells = `heatCapacityReactorPlating`:
-10 000 + 54 × 1 700), so the spinner alone cannot trigger path 3. It is reachable only via
-a pasted legacy code — which is precisely the user action that triggers it.
+#### ✅ Applied — strict parsing
 
-**Fix:** validate `paramNum < MAX_PARAM_TYPES`, check `extraCode.length()` before each
-`charAt`, clamp parsed `currentHeat` to `[0, 120000)`, and widen the `catch` to `Exception`
-so a bad paste degrades to the existing warning dialog instead of the global uncaught
-exception handler.
+All three readers (`readLegacyCode`, `readCodeString`, `handleTaloniusCode`) now **parse into
+locals and apply only once parsing has fully succeeded**, so a rejected code is
+all-or-nothing by construction rather than by careful ordering. Then:
+
+* `setCode` wraps the whole thing in `catch (IllegalArgumentException | IndexOutOfBoundsException)`
+  and warns. That covers `NumberFormatException`, bad Base64, too many parameters and a
+  truncated suffix, while deliberately *not* swallowing `NullPointerException` and friends —
+  those are real bugs, not bad input.
+* A fourth parameter is now refused deliberately, with a message naming the cell, rather than
+  being left to trip a bounds check.
+* `requireEncodable` refuses a legacy value the current writer could not encode — `currentHeat`,
+  `onPulse`, `offPulse`, `suspendTemp`, `resumeTemp` — which is what closes path 3. The
+  spinner's ceiling makes this unreachable from the UI, so it is a paste-only guard.
+* An unsupported revision warns and is refused instead of throwing.
+* **The reason is now appended to the warning.** `"Invalid Reactor Code: <code>"` on a
+  200-character paste tells the user nothing; appending `e.getMessage()` means the refusals
+  say what was wrong. This also makes the deliberate refusals distinguishable from accidental
+  ones in the tests.
+
+**Verified:**
+* **Corpus: 0 of 304 designs moved.** The restructure is behaviour-preserving for every
+  well-formed code, which is the strongest available evidence that nothing else changed.
+* Every malformed case now goes through `assertDoesNotThrow` **and** asserts the design is
+  byte-identical afterwards, checked against a reactor deliberately loaded with a quad rod,
+  plating, fluid/pulsed flags, heat and a custom tick limit.
+* Mutation check, 12 cases all caught: removing the blanket catch; applying the legacy grid
+  before the suffix is parsed (caught by 3 tests); each of the 5 range checks removed
+  individually; the revision guard; the param-count refusal; dropping the reason; the base64
+  grid not applied; `currentHeat` not assigned; the Talonius grid not applied; plus the P0-1
+  and P0-2 regression guards.
+
+#### A limitation worth stating plainly
+
+Neither code format carries a checksum, so strict parsing can guarantee "never crashes, never
+half-applies" but **cannot** distinguish garbage that happens to be well-formed. `"00AF"`
+decodes as a Base64 revision-0 payload whose fields all read as zero and loads as a blank
+reactor, with nothing to warn about. Recorded in
+`ReactorCodeSerializationTest.meaninglessPayloadIsInterpretedNotRefused` so a future attempt
+to add an integrity check knows this is the remaining hole.
 
 ### P1-2 ✅ `AutomationSimulator.completed` is a non-volatile cross-thread flag
 
@@ -620,11 +654,9 @@ design as safe".
 
 ## Recommended order of work
 
-1. ~~**P0-1** `Exchanger`~~ and ~~**P0-2** `Condensator`~~ — **both done and verified**; see
-   their sections above. No test in the suite is skipped any more.
-2. **P1-1** legacy-code validation — turns paste-and-crash into paste-and-warn. The tests under
-   `ReactorCodeSerializationTest.Malformed` currently assert the *crashing* behaviour and need
-   inverting to `assertDoesNotThrow` once it is fixed.
+1. ~~**P0-1** `Exchanger`~~, ~~**P0-2** `Condensator`~~ and ~~**P1-1** code parsing~~ — **all done
+   and verified**; see their sections above. No test in the suite is skipped any more.
+2. ~~**P1-1** code parsing~~ — **done and verified**; see above. Nothing skipped remains.
 3. **P2-1** `ImageIcon` caching — the only change users will actually perceive.
 4. **P2-2** flat component snapshot — measured −40 %, mechanical, self-contained.
 5. **P1-2 / P1-3** `volatile` + cancel path — two-line fixes.
@@ -636,7 +668,7 @@ design as safe".
 
 ## Testing
 
-A 483-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 489-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -790,9 +822,9 @@ reading the text. Any new test asserting on report text must do the same.
 ### Does it actually catch regressions?
 
 The suite was validated by mutation testing: 13 bugs injected into `src/` one at a time, with
-`src/` restored after each. **All 13 were caught.** Re-run after each P0 fix, all were still caught; nine further rows
-(single-tier partial reverts, the over-correction, and four P0-2 variants) were added as the fixes
-landed. A full run takes about 20 seconds.
+`src/` restored after each. **All 13 were caught.** Re-run after each fix, all were still caught; 21 further rows were
+added as the fixes landed — single-tier partial reverts, the over-correction, four P0-2 variants,
+and the P1-1 parsing cases above. A full run takes about 20 seconds.
 
 | Injected bug | Result |
 |---|---|
@@ -815,6 +847,10 @@ landed. A full run takes about 20 seconds.
 | P0-2 P3-18 reverted (counts offered heat) | failed |
 | P0-2 clamp dropped entirely | failed |
 | P0-2 no-op (absorbs nothing) | failed |
+| P1-1: legacy grid applied before the suffix is parsed | 3 failed |
+| P1-1: each of the 5 encodable-range checks removed | 5 x failed |
+| P1-1: revision guard / param-count refusal / reason removed | 3 x failed |
+| P1-1: base64 grid or currentHeat not applied, Talonius grid not applied | 3 x failed |
 
 ### Running the mutation checks
 
