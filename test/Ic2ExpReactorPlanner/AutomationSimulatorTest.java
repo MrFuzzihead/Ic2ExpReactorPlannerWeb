@@ -830,6 +830,28 @@ class AutomationSimulatorTest {
         }
     }
 
+    /**
+     * P2-3(a): the Javasharp dialect has no {@code Pattern} class, so the {@code matches("R\\dC\\d:.*")}
+     * test in {@code process()} is replaced by a hand-written predicate. This pins the two against
+     * each other over the awkward cases - wrong length, wrong case, two-digit indices, and the fact
+     * that this engine's {@code .} stops at {@code \n}, {@code \r}, {@code \u0085}, {@code \u2028} and
+     * {@code \u2029} but not at the vertical tab or form feed.
+     */
+    @Test
+    @DisplayName("the reactor-cell chunk test agrees with the pattern it replaced")
+    void reactorCellChunkTestAgreesWithTheRegex() {
+        String[] samples = {
+            "R1C2:0xC0C0C0", "R0C0:0x0", "R9C9:x", "R1C2:", "R1C", "R1C2", "r1C2:0", "R11C2:0",
+            "R1C12:0", "", "R1C2:0\tmore", "R1C2:0\u000B", "R1C2:0\u000C", "R1C2:0\u0085more",
+            "R1C2:0\u2028more", "R1C2:0\u2029more", "R1C2:0xC0C0C0\nmore", "R1C2:0xC0C0C0\rmore",
+            "RaC2:0", "R1Cb:0", "R\u00B9C2:0", "R1C2:\u2028", "R1C2:",
+        };
+        for (String sample : samples) {
+            assertTrue(sample.matches("R\\dC\\d:.*") == AutomationSimulator.isReactorCellChunk(sample),
+                    "the hand-written test must agree with the pattern it replaced for [" + sample + "]");
+        }
+    }
+
     /** Drops the wall-clock line, which is the only legitimately variable part of a report. */
     private static String stripElapsedTime(String report) {
         // Take the fixed prefix of the bundle entry so this keeps working under a translation.

@@ -18,10 +18,10 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 |----------------------------------------------|-------|
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
-| P2 — performance                             | 2 (2 fixed) |
+| P2 — performance                             | 3 (3 fixed) |
 | P3 — dead code, correctness-adjacent cleanup | 17 (2 fixed) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **494** |
+| **Covered by an automated regression test**  | **495** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -34,8 +34,8 @@ further findings, marked **🆕** below, and escalated P0-2 from a rounding erro
 silently-wrong safety verdict.
 
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
-`AutomationSimulator`, P2-1 `ImageIcon` caching and P2-2 the tick-loop snapshot — **all fixed and verified**. Both P0s are closed,
-and no test in the suite is skipped.
+`AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot and P2-3 the minor
+performance sweep — **all fixed and verified**. Both P0s are closed, and no test in the suite is skipped.
 
 ---
 
@@ -536,7 +536,7 @@ no deterministic hook inside `doInBackground`: `SwingWorker.publish(V...)` is *p
 only accumulates, which is why a normal run emits three property events rather than one per
 published line.
 
-### P2-3 🔍 Minor, safe to bundle with the above
+### P2-3 ✅ FIXED — Minor performance sweep — 3 of 5 sub-findings applied, 2 retracted
 
 | # | Finding                                                                                                                                                                    | Evidence                                                      |
 |---|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
@@ -545,6 +545,63 @@ published line.
 | c | `calculateHeatingCooling()` runs every tick after tick 20 but its totals are consumed exactly once, inside `showHeatingCooling()`                                          | read of both methods                                          |
 | d | `Exchanger.transfer()` recomputes loop-invariant `mymed`/`getCurrentHeat()/getMaxHeat()` inside the neighbour loop; `getCurrentHeat()` is not mutated until after the loop | `Exchanger.java:69, 96`                                       |
 | e | `TextureFactory.getImage` never `break`s out of `ASSET_PATHS` after a hit → up to 8 redundant `ZipEntry` lookups; called 72× at class init                                 | `TextureFactory.java:37-52`                                   |
+
+#### ✅ Applied and verified — (a), (b) and (d) applied; (c) and (e) retracted
+
+**(a) precompile the cell-chunk test — applied, but not with a `Pattern`.**
+The Javasharp dialect has no regex class in its class universe: `java.util.Pattern`,
+`java.util.RegExp` and four other spellings all fail to resolve, and no source in the repo has
+ever imported one. So the test is written out instead, which is both cheaper and class-free:
+
+```
+String.matches("R\\dC\\d:.*")   269.6 ns/call
+isReactorCellChunk(chunk)         7.3 ns/call   -> 37x cheaper
+```
+
+**🆕 The engine's `.` is not the JDK's.** Probed over the seven line separators: this engine's
+`.` stops at `\n`, `\r`, `\u0085`, `\u2028` and `\u2029`, but *matches* the vertical tab (`\u000B`)
+and form feed (`\u000C`) that the JDK's engine also excludes. The predicate had to be written to
+the engine's set, not the documented Java one. `AutomationSimulatorTest.reactorCellChunkTestAgreesWithTheRegex`
+pins the two against each other over 21 samples, so the divergence is caught rather than assumed.
+
+**(b) hoist the per-CSV-row bundle lookups — applied.** Six `getI18n(...)` calls per row are
+resolved once before the tick loop into `csvTickFormat` … `csvComponentOutputFormat`. Measured
+`getI18n` at **5.5 ns/call**, so this removes ~33 ns/tick from a CSV run and nothing elsewhere.
+
+**(d) hoist `mymed` out of the `Exchanger.transfer()` neighbour loop — applied.** `transfer()`
+adjusts this component's own heat only at `adjustCurrentHeat(myHeat)` after both blocks, so
+`getCurrentHeat()` is loop-invariant. Two mutations were checked: reverting the hoist leaves all
+495 green (the change is behaviour-preserving), seeding it from the wrong component fails 25 tests.
+
+**(c) `calculateHeatingCooling` "consumed exactly once" — retracted, it is load-bearing.**
+The totals are a running sum over ticks 21..N and `showHeatingCooling` divides by `reactorTicks - 20`,
+which is exactly the number of accumulated iterations. Computing it once at the end is a different
+number. Confirmed by mutation: changing the divisor to `1` fails `CorpusBaselineTest`.
+
+**(e) `TextureFactory.getImage` missing a `break` — retracted, already guarded.** The inner loop
+body is wrapped in `if (result == null)`, so a hit suppresses every later `getEntry` call; the
+remaining cost is seven no-op iterations across 72 calls at class init.
+
+**Measured (A/B, alternating processes, best of 3, 2 M ticks, headless):**
+
+| design | before | after | change |
+|---|---|---|---|
+| quad rod + 4 cells + 8 heat exchangers | 1119–1160 ns/tick | 1072–1093 ns/tick | **−4 %** |
+| quad rod + 4 cells, no exchangers | 249–260 ns/tick | 261–299 ns/tick | within noise |
+
+The sweep is small by construction: (a) is off the tick loop, (b) only runs when a CSV file is
+open, and (d) is one division and two multiplies per neighbour. The second row is reported as
+noise, not as a win.
+
+**Mutation checks:**
+
+| mutation | result |
+|---|---|
+| digit-range check dropped from `isReactorCellChunk` | 1 failed (`reactorCellChunkTestAgreesWithTheRegex`) — and only after `"RaC2:0"`/`"R1Cb:0"` samples were added; the first sample set did **not** exercise it |
+| `csvTickFormat` pointed at the wrong bundle key | 3 failed (all three CSV-shape tests) |
+| `Exchanger` hoist reverted | 0 failed — expected, the hoist is behaviour-preserving |
+| `Exchanger` hoist seeded from the wrong component | 25 failed (`ExchangerTest` + corpus) |
+| `showHeatingCooling` divisor changed to `1` | 1 failed (`CorpusBaselineTest`) — proves (c) is load-bearing |
 
 ---
 
@@ -776,8 +833,10 @@ design as safe".
 4. ~~**P2-2** flat component snapshot~~ — done, measured −54 % on a sparse grid (see P2-2).
 5. ~~**P1-2 / P1-3** `volatile` + cancel path~~ — **done and verified**; see above. The `volatile`
    half is not test-observable, which is stated rather than hidden.
-6. **P1-4** decide the heat-unit divisor and make the total and the per-tick figures consistent.
-7. **P3 sweep** — delete the dead `GGFuelRod` fields and `needsCooldown`, fix the
+6. ~~**P1-4** decide the heat-unit divisor~~ — **skipped**; re-evaluated as a false positive on the
+   arithmetic, leaving only the `HU/t` / `EU/t` bundle label to check against upstream.
+7. ~~**P2-3** minor sweep~~ — **done and verified**; see above. (c) and (e) retracted as false positives.
+8. **P3 sweep** — delete the dead `GGFuelRod` fields and `needsCooldown`, fix the
    `DEFAULT_RESUME_TEMP` comparison and the stale `lastEUoutput`, narrow `catch (Throwable)`,
    precompile the `process()` regex, hoist the CSV bundle keys, tidy `plannerResized`, and add
    the `parent` null guard in `Vent.getVentCoolingCapacity()`.
@@ -1003,9 +1062,9 @@ fails. Two practical warnings, both learned the hard way:
   `initComponents` (~2 400 lines) remains untested, so P3-7 still needs a manual pass.
 * **No fuzz or property test on `Reactor.setCode`.** The malformed cases are hand-picked. A
   generator over random byte strings is the natural way to close P1-1 off properly.
-* **No performance regression guard.** P2-1 and P2-2 were measured with a throwaway harness,
+* **No performance regression guard.** P2-1, P2-2 and P2-3 were measured with a throwaway harness,
   not by a benchmark in the suite. The P2-1 *cache* is pinned (a mutation that stops caching fails),
-  but nothing fails if the cache is merely slow or poorly bounded.
+  and P2-3(a) is pinned by an equivalence test, but nothing fails if any of them is merely slow or poorly bounded.
 * **`volatile` fixes are not test-observable.** P1-2 landed with no test that can fail against it;
   the mutation table records that as *not caught*. A real guard would need a thread-sanitizer-style
   harness or a deliberately slow interleaving, neither of which JUnit here provides.

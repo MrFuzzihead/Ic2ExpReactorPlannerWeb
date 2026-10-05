@@ -64,8 +64,10 @@ public class Exchanger extends ReactorItem {
         // Code adapted from decompiled IC2 code, class ItemReactorHeatSwitch, with permission from Thunderdark.
         double myHeat = 0;
         if (switchSide > 0) {
+            // P2-3(d): this component's own heat is only adjusted after both blocks below, so mymed
+            // is loop-invariant and does not belong inside the neighbour loop.
+            final double mymed = getCurrentHeat() * 100.0 / getMaxHeat();
             for (ReactorItem heatableNeighbor : heatableNeighbors) {
-                double mymed = getCurrentHeat() * 100.0 / getMaxHeat();
                 double heatablemed = heatableNeighbor.getCurrentHeat() * 100.0 / heatableNeighbor.getMaxHeat();
 
                 double add = (int) (heatableNeighbor.getMaxHeat() / 100.0 * (heatablemed + mymed / 2.0));

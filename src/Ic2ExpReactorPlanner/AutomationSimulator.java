@@ -200,6 +200,14 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             allFuelRodsDepleted = false;
             componentsIntact = true;
             anyRodsDepleted = false;
+            // P2-3(b): the bundle lookups are constant for the whole run, so resolve them once
+            // rather than six times per CSV row.
+            final String csvTickFormat = getI18n("CSVData.EntryReactorTick");
+            final String csvCoreHeatFormat = getI18n("CSVData.EntryCoreHeat");
+            final String csvHUOutputFormat = getI18n("CSVData.EntryHUOutput");
+            final String csvEUOutputFormat = getI18n("CSVData.EntryEUOutput");
+            final String csvComponentValueFormat = getI18n("CSVData.EntryComponentValue");
+            final String csvComponentOutputFormat = getI18n("CSVData.EntryComponentOutput");
             do {
                 reactorTicks++;
                 reactor.clearEUOutput();
@@ -274,12 +282,12 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                 calculateHeatingCooling(reactorTicks);
                 handleAutomation(reactorTicks);
                 if (csvOut != null && reactorTicks <= csvLimit) {
-                    csvOut.printf(getI18n("CSVData.EntryReactorTick"), reactorTicks);
-                    csvOut.printf(getI18n("CSVData.EntryCoreHeat"), reactor.getCurrentHeat());
+                    csvOut.printf(csvTickFormat, reactorTicks);
+                    csvOut.printf(csvCoreHeatFormat, reactor.getCurrentHeat());
                     if (reactor.isFluid()) {
-                        csvOut.printf(getI18n("CSVData.EntryHUOutput"), reactor.getVentedHeat() * 40);
+                        csvOut.printf(csvHUOutputFormat, reactor.getVentedHeat() * 40);
                     } else {
-                        csvOut.printf(getI18n("CSVData.EntryEUOutput"), reactor.getCurrentEUoutput());
+                        csvOut.printf(csvEUOutputFormat, reactor.getCurrentEUoutput());
                     }
                     for (final ReactorItem component : tickComponents) {
                         if (component.getMaxHeat() > 1 || component.getMaxDamage() > 1) {
@@ -287,10 +295,10 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                             if (component.getMaxHeat() > 1) {
                                 componentValue = component.getCurrentHeat();
                             }
-                            csvOut.printf(getI18n("CSVData.EntryComponentValue"), componentValue);
+                            csvOut.printf(csvComponentValueFormat, componentValue);
                         }
                         if (component.producesOutput()) {
-                            csvOut.printf(getI18n("CSVData.EntryComponentOutput"), component.getCurrentOutput());
+                            csvOut.printf(csvComponentOutputFormat, component.getCurrentOutput());
                         }
                     }
                     csvOut.println();
@@ -869,13 +877,39 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
         }
     }
 
+    // P2-3(a): String.matches recompiles the pattern on every call, and process() runs on the EDT
+    // once per accumulated publish batch. The Javasharp dialect has no Pattern class to precompile
+    // into, so the test is written out. It is exactly matches("R\\dC\\d:.*") for this regex engine -
+    // whose dot stops at \n, \r, \u0085, \u2028 and \u2029 but *not* at the vertical tab or form feed
+    // that the JDK's engine also excludes. AutomationSimulatorTest pins the two against each other.
+    public static boolean isReactorCellChunk(final String chunk) {
+        if (chunk.length() < 5
+                || chunk.charAt(0) != 'R'
+                || chunk.charAt(2) != 'C'
+                || chunk.charAt(4) != ':') {
+            return false;
+        }
+        final char rowChar = chunk.charAt(1);
+        final char colChar = chunk.charAt(3);
+        if (rowChar < '0' || rowChar > '9' || colChar < '0' || colChar > '9') {
+            return false;
+        }
+        for (int i = 5; i < chunk.length(); i++) {
+            final char c = chunk.charAt(i);
+            if (c == '\n' || c == '\r' || c == '\u0085' || c == '\u2028' || c == '\u2029') {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     protected void process(List<String> chunks) {
         for (String chunk : chunks) {
             if (chunk.isEmpty()) {
                 output.setText(""); // NO18N
             } else {
-                if (chunk.matches("R\\dC\\d:.*")) { // NO18N
+                if (isReactorCellChunk(chunk)) { // NO18N
                     String temp = chunk.substring(5);
                     int row = chunk.charAt(1) - '0';
                     int col = chunk.charAt(3) - '0';
