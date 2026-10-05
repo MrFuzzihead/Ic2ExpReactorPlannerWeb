@@ -2,8 +2,15 @@ package Ic2ExpReactorPlanner;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.Image;
+import javax.swing.Icon;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
 import Ic2ExpReactorPlanner.components.ReactorItem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -158,6 +165,63 @@ class ReactorPlannerFrameMappingTest {
             String baseName = ComponentFactory.getDefaultComponent(id).baseName;
             assertTrue(mapped.contains(baseName), baseName + " has no tooltip label");
         }
+    }
+
+    // ================================================================== icon cache (P2-1)
+
+    /**
+     * Pinned through the static seam rather than a JFrame: the frame itself is never constructed
+     * in a test, so the cache and the button helper are the parts that can run headless.
+     */
+    @Test
+    @DisplayName("a texture at a fixed size scales once, not once per button")
+    void oneScaledIconPerTextureAndSize() {
+        java.awt.Image texture = ComponentFactory.getDefaultComponent("fuelRodCesium").image;
+        assertNotNull(texture, "the texture did not load in the test environment");
+        javax.swing.ImageIcon first = ReactorPlannerFrame.getCachedIcon(texture, 40);
+        javax.swing.ImageIcon again = ReactorPlannerFrame.getCachedIcon(texture, 40);
+        assertSame(first, again, "the second request re-scaled the texture");
+        assertEquals(40, first.getImage().getWidth(null));
+        assertEquals(40, first.getImage().getHeight(null));
+    }
+
+    @Test
+    @DisplayName("sizes are not confused with each other")
+    void differentSizesGetDifferentIcons() {
+        java.awt.Image texture = ComponentFactory.getDefaultComponent("fuelRodCesium").image;
+        javax.swing.ImageIcon small = ReactorPlannerFrame.getCachedIcon(texture, 20);
+        javax.swing.ImageIcon large = ReactorPlannerFrame.getCachedIcon(texture, 60);
+        assertNotSame(small, large, "the pixel size is not part of the cache key");
+        assertEquals(20, small.getImage().getWidth(null));
+        assertEquals(60, large.getImage().getWidth(null));
+    }
+
+    @Test
+    @DisplayName("the cache is bounded so a resize drag cannot retain every intermediate")
+    void cacheIsBounded() {
+        java.awt.Image texture = ComponentFactory.getDefaultComponent("fuelRodCesium").image;
+        javax.swing.ImageIcon first = ReactorPlannerFrame.getCachedIcon(texture, 1);
+        for (int size = 2; size <= ReactorPlannerFrame.ICON_CACHE_LIMIT + 1; size++) {
+            ReactorPlannerFrame.getCachedIcon(texture, size);
+        }
+        assertNotSame(
+                first,
+                ReactorPlannerFrame.getCachedIcon(texture, 1),
+                "the cache kept every size the sweep asked for");
+    }
+
+    @Test
+    @DisplayName("a button that already has the right icon is left alone")
+    void unchangedSizeLeavesTheButtonAlone() {
+        java.awt.Image texture = ComponentFactory.getDefaultComponent("fuelRodCesium").image;
+        javax.swing.JButton button = new javax.swing.JButton();
+        ReactorPlannerFrame.setComponentIcon(button, texture, 50);
+        javax.swing.Icon applied = button.getIcon();
+        assertNotNull(applied, "a button of a usable size still got no icon");
+        ReactorPlannerFrame.setComponentIcon(button, texture, 50);
+        assertSame(applied, button.getIcon(), "the memo did not hold and the icon was replaced");
+        ReactorPlannerFrame.setComponentIcon(button, texture, 2);
+        assertNull(button.getIcon(), "a button too small to draw on keeps an icon");
     }
 
     // ================================================================== resource bundle

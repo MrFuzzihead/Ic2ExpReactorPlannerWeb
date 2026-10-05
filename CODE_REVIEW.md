@@ -18,10 +18,10 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 |----------------------------------------------|-------|
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
-| P2 — performance                             | 2     |
+| P2 — performance                             | 2 (1 fixed) |
 | P3 — dead code, correctness-adjacent cleanup | 17 (2 fixed) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **490** |
+| **Covered by an automated regression test**  | **494** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -33,9 +33,9 @@ above can be made safely; see [Testing](#testing) at the end. Building them also
 further findings, marked **🆕** below, and escalated P0-2 from a rounding error into a
 silently-wrong safety verdict.
 
-**Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10 and P1-2/P1-3
-`AutomationSimulator` — **all fixed and verified**. Both P0s are closed, and no test in the suite
-is skipped.
+**Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
+`AutomationSimulator` and P2-1 `ImageIcon` caching — **all fixed and verified**. Both P0s are closed,
+and no test in the suite is skipped.
 
 ---
 
@@ -409,7 +409,7 @@ discrepancy cannot change unnoticed.
 
 ## P2 — Performance (measured)
 
-### P2-1 ✅ `ImageIcon` churn: up to 127 throwaway icons per resize event, 54 per keystroke
+### P2-1 ✅ FIXED — `ImageIcon` churn: up to 127 throwaway icons per resize event, 54 per keystroke
 
 **File:** `src/Ic2ExpReactorPlanner/ReactorPlannerFrame.java` — 4 sites, **all** of which
 call `getScaledInstance(..., Image.SCALE_FAST)` inside `new ImageIcon(...)`:
@@ -429,6 +429,29 @@ window drag produces thousands of scaled `BufferedImage`s and, because
 
 **Fix:** cache scaled images keyed by `(component id, pixel size)` and reuse one
 `ImageIcon` instance per button; skip entirely when the computed size is unchanged.
+
+**Applied and verified.** All four sites now go through one helper, `setComponentIcon(button, image,
+buttonSize)`, which delegates to a `getCachedIcon(image, size)` lookup. Two deliberate departures
+from the wording above:
+
+* The cache is keyed by **image identity**, not component id. `ComponentFactory` prototypes and
+  `copy()` share one `java.awt.Image` per component type, so two instances of the same type cost
+  one entry — and two *different* types that happen to share a texture correctly share one icon.
+* The cache is **bounded** (`ICON_CACHE_LIMIT = 512`, cleared wholesale when reached). A resize
+  drag invents a new pixel size per event; unbounded, that retains every intermediate the drag
+  produced, which is a slow leak rather than a win.
+
+Measured with a throwaway harness over 54 buttons, JDK 8:
+
+| case                                        | before         | after          |
+|---------------------------------------------|----------------|----------------|
+| size unchanged (layout passes, keystrokes)  | 1 034 µs/event | **7 µs/event** |
+| size changing, textures shared              | 2 729 µs/event | **47 µs/event** |
+| size changing, 54 distinct textures (worst) | 1 837 µs/event | 1 501 µs/event |
+
+The third row is honest: when every button holds a different texture *and* the size changes, every
+lookup misses and the helper buys ~18 % at best. The win is in the first row, which is the case the
+finding describes — repeated events at an unchanged size.
 
 ### P2-2 ✅ Flat component snapshot in the tick loop — measured **40 % faster**
 
@@ -697,7 +720,8 @@ design as safe".
 1. ~~**P0-1** `Exchanger`~~, ~~**P0-2** `Condensator`~~ and ~~**P1-1** code parsing~~ — **all done
    and verified**; see their sections above. No test in the suite is skipped any more.
 2. ~~**P1-1** code parsing~~ — **done and verified**; see above. Nothing skipped remains.
-3. **P2-1** `ImageIcon` caching — the only change users will actually perceive.
+3. ~~**P2-1** `ImageIcon` caching~~ — **done and verified**; see above. The cache is pinned by four
+   new tests through a static seam; the memo itself is not observable and is recorded as such.
 4. **P2-2** flat component snapshot — measured −40 %, mechanical, self-contained.
 5. ~~**P1-2 / P1-3** `volatile` + cancel path~~ — **done and verified**; see above. The `volatile`
    half is not test-observable, which is stated rather than hidden.
@@ -709,7 +733,7 @@ design as safe".
 
 ## Testing
 
-A 489-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 494-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -896,6 +920,10 @@ the P1-1 parsing cases, and the P1-3 cancel-path cases. A full run takes about 2
 | P1-3 partial revert: only `completed = true` dropped | 1 failed (`getData()` assertion) |
 | P1-3 partial revert: only `firePropertyChange` dropped | 1 failed (latch) |
 | P1-2: `volatile` removed from `completed` | **not caught** — see P1-2, a green run is not evidence |
+| P2-1: cache lookup removed (always re-scale) | 4 failed (`oneScaledIconPerTextureAndSize`, `differentSizesGetDifferentIcons`, `cacheIsBounded`, `unchangedSizeLeavesTheButtonAlone`) |
+| P2-1: pixel size dropped from `getScaledInstance` | 4 failed |
+| P2-1: bound removed, cache never cleared | 1 failed (`cacheIsBounded`) |
+| P2-1: memo dropped, `setIcon` unconditional | **not caught** — the memo is behaviourally invisible; only the cache above it is pinned |
 
 ### Running the mutation checks
 
@@ -919,12 +947,14 @@ fails. Two practical warnings, both learned the hard way:
 ### Gaps worth closing
 
 * **No test drives `ReactorPlannerFrame` itself.** The frame needs a display, so only its pure
-  static helpers are covered. The generated Swing in `initComponents` (~2 400 lines) is
-  untested; P2-1 and P3-7 will need a manual pass.
+  static helpers are covered — which now includes the P2-1 icon cache, since `getCachedIcon` and
+  `setComponentIcon` were made `static` precisely to give it a seam. The generated Swing in
+  `initComponents` (~2 400 lines) remains untested, so P3-7 still needs a manual pass.
 * **No fuzz or property test on `Reactor.setCode`.** The malformed cases are hand-picked. A
   generator over random byte strings is the natural way to close P1-1 off properly.
 * **No performance regression guard.** P2-1 and P2-2 were measured with a throwaway harness,
-  not by a benchmark in the suite. If you want to keep the 40 % win, add one.
+  not by a benchmark in the suite. The P2-1 *cache* is pinned (a mutation that stops caching fails),
+  but nothing fails if the cache is merely slow or poorly bounded.
 * **`volatile` fixes are not test-observable.** P1-2 landed with no test that can fail against it;
   the mutation table records that as *not caught*. A real guard would need a thread-sanitizer-style
   harness or a deliberately slow interleaving, neither of which JUnit here provides.

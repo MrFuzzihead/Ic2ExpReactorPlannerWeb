@@ -110,6 +110,20 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
 
     private String prevReactorOldCode = null;
 
+    // P2-1: scaling an icon allocates a fresh BufferedImage and, because ImageIcon(Image) loads
+    // asynchronously, a loader thread. plannerResized fires on every layout pass and updateReactorButtons
+    // runs on every keystroke, so the scaled result is cached per (source image, pixel size) and the
+    // same ImageIcon instance is reused across buttons. Keyed by image identity, which is what
+    // ComponentFactory prototypes and copy() share, so two instances of one component type cost one entry.
+    private static java.util.HashMap<Image, java.util.HashMap<Integer, ImageIcon>> iconCache =
+            new java.util.HashMap<Image, java.util.HashMap<Integer, ImageIcon>>();
+
+    // A resize drag visits a new pixel size per event, so the cache has to be bounded or it retains
+    // every intermediate. Clearing it wholesale keeps the steady-state win and caps the memory.
+    public static final int ICON_CACHE_LIMIT = 512;
+
+    private static int iconCacheEntries = 0;
+
     /**
      * Creates new form ReactorPlannerFrame
      */
@@ -279,9 +293,8 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
                                 reactorButtons[finalRow][finalCol].getWidth(),
                                 reactorButtons[finalRow][finalCol].getHeight());
                         if (buttonSize > 2 && componentToPlace != null && componentToPlace.image != null) {
-                            reactorButtons[finalRow][finalCol].setIcon(
-                                    new ImageIcon(componentToPlace.image.getScaledInstance(
-                                            buttonSize * 8 / 10, buttonSize * 8 / 10, Image.SCALE_FAST)));
+                            setComponentIcon(
+                                    reactorButtons[finalRow][finalCol], componentToPlace.image, buttonSize);
                             reactorButtons[finalRow][finalCol].setToolTipText(componentToPlace.toString());
                             reactorButtons[finalRow][finalCol].setBackground(Color.LIGHT_GRAY);
                         } else {
@@ -1886,6 +1899,58 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         setLocationRelativeTo(null);
     } // </editor-fold>//GEN-END:initComponents
 
+    /**
+     * The scaled icon for a texture at a pixel size, created once and handed back identically
+     * every time. Public as a seam: the frame itself is never constructed in a test, so this is
+     * the part a headless test can pin.
+     */
+    public static ImageIcon getCachedIcon(
+            final Image sourceImage,
+            final int iconSize) {
+        java.util.HashMap<Integer, ImageIcon> scaledTo = iconCache.get(sourceImage);
+        if (scaledTo == null) {
+            scaledTo = new java.util.HashMap<Integer, ImageIcon>();
+            iconCache.put(sourceImage, scaledTo);
+        }
+        ImageIcon icon = scaledTo.get(iconSize);
+        if (icon == null) {
+            if (iconCacheEntries >= ICON_CACHE_LIMIT) {
+                // Drop the whole cache rather than age out entries one by one: a resize drag
+                // invents a new pixel size per event, and those are the entries nobody will reuse.
+                iconCache.clear();
+                iconCacheEntries = 0;
+                scaledTo = iconCache.get(sourceImage);
+                if (scaledTo == null) {
+                    scaledTo = new java.util.HashMap<Integer, ImageIcon>();
+                    iconCache.put(sourceImage, scaledTo);
+                }
+            }
+            icon = new ImageIcon(sourceImage.getScaledInstance(iconSize, iconSize, Image.SCALE_FAST));
+            scaledTo.put(iconSize, icon);
+            iconCacheEntries++;
+        }
+        return icon;
+    }
+
+    /**
+     * Sets a button's icon from a component's texture, reusing a cached scaled image when one
+     * exists and doing nothing at all when the button already holds that exact instance. This is
+     * the whole point of the call: a layout pass that leaves the size alone must not re-scale.
+     */
+    public static void setComponentIcon(
+            final javax.swing.AbstractButton button,
+            final Image sourceImage,
+            final int buttonSize) {
+        if (buttonSize > 2 && sourceImage != null) {
+            final ImageIcon icon = getCachedIcon(sourceImage, buttonSize * 8 / 10);
+            if (button.getIcon() != icon) {
+                button.setIcon(icon);
+            }
+        } else {
+            button.setIcon(null);
+        }
+    }
+
     private void plannerResized(java.awt.event.ComponentEvent evt) { // GEN-FIRST:event_plannerResized
         // Force minimum dimensions to be honored, since Swing apparently doesn't handle that automatically.
         Dimension dim = this.getSize();
@@ -1904,8 +1969,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             if (buttonSize > 2) {
                 final ReactorItem component = ComponentFactory.getDefaultComponent(button.getActionCommand());
                 if (component != null && component.image != null) {
-                    button.setIcon(new ImageIcon(component.image.getScaledInstance(
-                            buttonSize * 8 / 10, buttonSize * 8 / 10, Image.SCALE_FAST)));
+                    setComponentIcon(button, component.image, buttonSize);
                 } else {
                     button.setIcon(null);
                 }
@@ -1917,8 +1981,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
                 if (buttonSize > 2) {
                     final ReactorItem component = reactor.getComponentAt(row, col);
                     if (component != null && component.image != null) {
-                        reactorButtons[row][col].setIcon(new ImageIcon(component.image.getScaledInstance(
-                                buttonSize * 8 / 10, buttonSize * 8 / 10, Image.SCALE_FAST)));
+                        setComponentIcon(reactorButtons[row][col], component.image, buttonSize);
                     } else {
                         reactorButtons[row][col].setIcon(null);
                     }
@@ -2549,8 +2612,8 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
                 int buttonSize = Math.min(
                         reactorButtons[finalRow][finalCol].getWidth(), reactorButtons[finalRow][finalCol].getHeight());
                 if (buttonSize > 2 && componentToPlace != null && componentToPlace.image != null) {
-                    reactorButtons[finalRow][finalCol].setIcon(new ImageIcon(componentToPlace.image.getScaledInstance(
-                            buttonSize * 8 / 10, buttonSize * 8 / 10, Image.SCALE_FAST)));
+                    setComponentIcon(
+                            reactorButtons[finalRow][finalCol], componentToPlace.image, buttonSize);
                     reactorButtons[finalRow][finalCol].setToolTipText(componentToPlace.toString());
                     reactorButtons[finalRow][finalCol].setBackground(Color.LIGHT_GRAY);
                 } else {
