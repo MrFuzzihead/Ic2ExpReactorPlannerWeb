@@ -33,7 +33,7 @@ Development
 ./gradlew test --tests '*FuelRodTest'           # one class or nested class
 ```
 
-The suite is 525 JUnit 5 tests and runs headless in about 20 seconds. It covers the component
+The suite is 527 JUnit 5 tests and runs headless in about 20 seconds. It covers the component
 calculation logic, the tick simulation loop, and reactor code serialization. Two things are
 worth knowing before you change a formula:
 
@@ -53,6 +53,10 @@ worth knowing before you change a formula:
   `MAX_REACTOR_PAUSE`, `CODE_TEMP_BOUND`, `CODE_HEAT_BOUND` and `MAX_AUTOMATION_THRESHOLD` are shared
   by the writer, the reader, the component setters and the GUI spinners. A bound change belongs there,
   not at the 18 places that used to spell the same number as a literal.
+* **`SimulationCostTest` bounds cost, it does not benchmark it.** Two relative invariants — per-tick
+  cost flat in the tick cap, and a five-component design far cheaper per tick than the same design
+  plated — fail on a quadratic loop and on the tick-loop snapshot being dropped. Absolute speed is
+  not asserted, and a design that is merely slower for unrelated reasons fails nothing.
 
 ### The simulation corpus
 

@@ -1,7 +1,7 @@
 # Release notes — 2.5.2-GTNH
 
 Everything since tag `2.5.1-GTNH` (`26dba79` "fix breedercell", 2023-01-31): **32 commits**.
-Suite at HEAD: **525 JUnit 5 tests, 0 failed, 0 skipped**. Corpus gate: **304 designs** in
+Suite at HEAD: **527 JUnit 5 tests, 0 failed, 0 skipped**. Corpus gate: **304 designs** in
 `testResources/corpus-baseline.txt`, all matching.
 
 The full audit trail for every line below is [`CODE_REVIEW.md`](CODE_REVIEW.md).
@@ -80,7 +80,7 @@ No corpus design moved for any of these — they change iteration cost, not arit
 
 ## 5. Test suite and corpus
 
-* Suite grew **458 → 525** tests, and **nothing is skipped any more**. The `Current…`
+* Suite grew **458 → 527** tests, and **nothing is skipped any more**. The `Current…`
   characterisation tests and their `@Disabled` contract tests from Phase 0 are gone: both P0s are
   fixed, so the suite now asserts the intended behaviour directly.
 * **P1-5** added `ReactorCodeFuzzTest`, a deterministic mutation harness over `setCode`: ~1 600
@@ -95,6 +95,11 @@ No corpus design moved for any of these — they change iteration cost, not arit
   `tickLimitModel`, `pauseModel`), which is what makes their ranges testable. **No number changed,
   so no design moves** — this is what stops the threshold spinner's kind of drift from happening
   again rather than fixing a second instance of it.
+* `SimulationCostTest` now bounds the cost of a simulated tick: a run four times as long must cost
+  the same per tick (measured 311 ns/tick at 150 000 ticks against 332 at 600 000), and a five-component
+  design must cost far less per tick than the same design with the other 49 cells plated (measured
+  839 against 4 040). These are **relative** invariants — absolute speed is not asserted, because
+  the same JVM on a loaded CI box spans an order of magnitude.
 * The corpus gate (`CorpusBaselineTest`) is unchanged in mechanism: it fails on any drift and
   reports which designs moved and which component categories they share. It is **green at HEAD**.
 * `TextureFactory`'s texture-pack zip branch is now covered: `getImageFromPack` and
@@ -118,15 +123,17 @@ No corpus design moved for any of these — they change iteration cost, not arit
 * **Spotless is a no-op offline.** In a checkout where Blowdryer's shared config has not been
   downloaded, `spotlessJava` has an empty target and `spotlessCheck` passes without inspecting
   anything. Run `./gradlew spotlessApply` with network access **before pushing**.
-* **No performance regression guard.** P2-1/P2-2/P2-3 were measured with a throwaway harness;
-  nothing in the suite fails if the simulation gets slower.
+* **No absolute performance guard.** `SimulationCostTest` asserts two *relative* invariants, which
+  fail on a quadratic tick loop and on the tick-loop snapshot being dropped, but nothing fails for a
+  design that is merely slower for unrelated reasons, for a snapshot rebuilt per tick, or for one
+  loop of nine reverted. A real guard needs a benchmark harness, which this repo does not have.
 
 ## Building and testing this release
 
 Gradle 7.6 will not run on Java 20 or newer, so JDK 8 is required for the suite:
 
 ```bash
-JAVA_HOME="/path/to/jdk-8" ./gradlew test --rerun     # ~21 s, expect 525 passed / 0 failed
+JAVA_HOME="/path/to/jdk-8" ./gradlew test --rerun     # ~23 s, expect 527 passed / 0 failed
 JAVA_HOME="/path/to/jdk-8" ./gradlew assemble         # the jar into build/libs
 ```
 

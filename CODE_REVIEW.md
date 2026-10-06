@@ -607,6 +607,38 @@ no deterministic hook inside `doInBackground`: `SwingWorker.publish(V...)` is *p
 only accumulates, which is why a normal run emits three property events rather than one per
 published line.
 
+#### ✅ Gap closed — a performance guard exists now, as two relative invariants
+
+`SimulationCostTest` measures simulated runs headlessly and asserts two things that survive a
+loaded CI box, where an absolute ns/tick threshold would not:
+
+| invariant | measured in the suite | asserted | fails when |
+|---|---|---|---|
+| a run four times as long costs the same per tick | 311 ns/tick at 150 000 ticks, 332 at 600 000 (1.07x) | ≤ 2x | a loop turns quadratic in the tick count |
+| the tick loop is not charged for empty cells | 839 ns/tick for five components, 4 040 for the same design plated (4.8x) | ≥ 3x | the flat `ReactorItem[]` snapshot is dropped — the A/B above put the gap at 2.4x then |
+
+Both numbers are the suite's, not the standalone harness's: inside Gradle the JVM is colder, so the
+same design costs about 3x the absolute ns/tick it did in the harness, while the **gap** — which is
+what the guard uses — is the same 4.8x against the harness's 5.5-6.3x. Each measurement is a min of
+two runs, since a GC pause inflates a run rather than deflating one.
+
+**What the guard does not catch**, recorded rather than hidden:
+
+* A snapshot rebuilt per tick instead of per run: both designs pay the same extra work, so the gap
+  moves 4.8x → 4.25x and the 3x bound still passes. The invariant is about the *grid charge*, not
+  about how often the snapshot is taken.
+* A single loop reverted out of nine: each loop is ~1/7 of the win, the gap moves ~4.8x → ~4.5x.
+  The guard is sensitive to the aggregate, not to one tier of a partial revert.
+* A design that is merely slower for unrelated reasons: nothing here fails. A real guard needs a
+  benchmark harness, which this repo does not have.
+
+| mutation | result |
+|---|---|
+| inner loop made quadratic in `reactorTicks` | **2 failed** — both cost tests; the linearity one at 2 445 ns/tick against 1 102 |
+| `snapshotGrid()` called per tick instead of per run | **0 failed** — see the caveat above |
+| bounds raised to 10x / 1x (a probe, not a code mutation) | **2 failed** — prints the clean numbers, 839 / 4 040 and 311 / 332 |
+| suite runtime after the guard | 21 s → 23 s |
+
 ### P2-3 ✅ FIXED — Minor performance sweep — 3 of 5 sub-findings applied, 2 retracted
 
 | # | Finding                                                                                                                                                                    | Evidence                                                      |
@@ -1620,7 +1652,7 @@ design as safe".
 
 ## Testing
 
-A 525-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 527-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -1729,6 +1761,7 @@ Two environment notes:
 | `ReactorCodeSerializationTest` | Round-trips every one of the 72 components, a full 54-slot layout, all mode combinations, code revisions 0–4, the legacy hex format, Talonius codes, and every malformed-input case. |
 | `ReactorCodeFuzzTest` | Deterministic mutation harness over `setCode`: every prefix, single-character deletion and substitution of a populated code and its legacy form, plus edge junk — asserting the parser is atomic (the reactor is unchanged, or lands on a design that re-encodes to itself) and never throws. |
 | `AutomationSimulatorTest` | End-to-end: determinism, heating to explosion, output totals, cooling, pulsed/automated/fluid modes, coolant injectors, explosion power, depletion, CSV output. |
+| `SimulationCostTest` | Two relative cost invariants over real simulated runs: per-tick cost flat in the tick cap, and a five-component design far cheaper per tick than the same design plated. Bounds, not a benchmark — see P2-2. |
 | `MaterialsListTest` | Recipe aggregation, every component has a recipe, GT-version and flag variants, comparison rendering. |
 | `ComponentFactoryTest` | The id/name registries, copy-on-create, subclass preservation, tooltip coverage. |
 | `BigintStorageTest` | Field packing order, bounds checking, Base64 round-trip. |
@@ -1835,6 +1868,8 @@ the P1-1 parsing cases, and the P1-3 cancel-path cases, and the code-bound and s
 | `ReactorPlannerFrame.pauseModel`: bound → `MAX_COMPONENT_HEAT` | 2 failed |
 | `ReactorItem.setReactorPause`: bound → literal `5e3` | 2 failed |
 | `Reactor` writer: tick bound → `(int) 1e6` | 53 failed (incl. the corpus gate) |
+| `AutomationSimulator`: inner loop quadratic in `reactorTicks` | 2 failed (both cost invariants) |
+| `AutomationSimulator`: `snapshotGrid()` called per tick | 0 failed (recorded as not caught) |
 | P0-1 revert: any single cascade tier back to `switchSide` | 3 × failed |
 | P0-1 over-correction: the *side* block switched too | failed |
 | P0-2 reverted to the old bound | failed |
@@ -1892,9 +1927,11 @@ fails. Two practical warnings, both learned the hard way:
   bound families above were added, the reader/writer bound mismatches — every bounded reactor-level
   field at its bound and one past it, plus the component setter that sits under both bounds. The
   hand-built payloads in `ReactorCodeSerializationTest` remain as the per-revision ladder cases.
-* **No performance regression guard.** P2-1, P2-2 and P2-3 were measured with a throwaway harness,
-  not by a benchmark in the suite. The P2-1 *cache* is pinned (a mutation that stops caching fails),
-  and P2-3(a) is pinned by an equivalence test, but nothing fails if any of them is merely slow or poorly bounded.
+* ~~**No performance regression guard.**~~ **Closed as far as JUnit can** — `SimulationCostTest`
+  asserts two relative invariants (per-tick cost flat in the tick cap; a five-component design far
+  cheaper per tick than the same design plated), which fail on a quadratic loop and on the snapshot
+  being dropped. What it still does not catch is recorded in P2-2: a snapshot rebuilt per tick, one
+  loop of nine reverted, or a design that is merely slower for unrelated reasons.
 * **`volatile` fixes are not test-observable.** P1-2 and P3-11 landed with no test that can fail
   against them; both mutation tables record that as *not caught*. A real guard would need a thread-sanitizer-style
   harness or a deliberately slow interleaving, neither of which JUnit here provides.
