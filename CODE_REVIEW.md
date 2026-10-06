@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 5 (4 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (16 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (17 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **511** |
 
@@ -37,7 +37,7 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-2 the stale `lastEUoutput`, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals and P3-7 the resize guard — **all fixed and verified**;
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals, P3-7 the resize guard and P3-11 the cross-thread config fields — **all fixed and verified**;
 P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
@@ -1061,7 +1061,7 @@ the declaration. The Talonius test in `ReactorCodeSerializationTest` no longer n
 and `WarningDisplayTest` covers the sink itself — including that `setSink(null)` restores the
 dialog, so a failing test cannot leave warnings silently discarded for the rest of the JVM.
 
-### P3-11 🔍 Non-volatile global mutable config read across threads
+### P3-11 ✅ FIXED 🔍 Non-volatile global mutable config read across threads
 
 `FuelRod.GT509behavior`, `FuelRod.GTNHbehavior`, `Reflector.mcVersion`,
 `MaterialsList.gtVersion`, `MaterialsList.componentMaterialsMap` and the **public mutable**
@@ -1070,6 +1070,42 @@ dialog, so a failing test cannot leave warnings silently discarded for the rest 
 `componentMaterialsMap`) and read from the simulation thread. Same visibility concern as
 P1-2. Low impact in practice since the simulation runs on a separate `Reactor`, but the map
 rebuild is a genuinely visible risk.
+
+#### ✅ Applied and verified — no calculation touched
+
+**Measured first: which of those fields is actually read off the EDT.** A sweep of every non-`final`
+`static` in `src/**` found exactly these, plus `ReactorPlannerFrame.iconCache` / `iconCacheEntries`
+(EDT-only) and `WarningDisplay.sink`, which is already `volatile`:
+
+| field | written by | read by | off-EDT reader? |
+|---|---|---|---|
+| `FuelRod.GT509behavior`, `GTNHbehavior` | `ReactorPlannerFrame.java:2372-2381` (combo handlers) | `generateHeat` (`:177`), `getEnergy` (`:188`), `getHeatBonus` (`:208`), `generateEnergy` (`:217`) — reached from `AutomationSimulator.java:228` / `:241` every tick | **yes** |
+| `Reflector.mcVersion` | `ReactorPlannerFrame.java:2356` | `getMaxDamage()` (`:64`) — reached from `AutomationSimulator.java:160`, `:293`, `:485-488`, `:809` | **yes** |
+| `MaterialsList.gtVersion`, `useUfcForCoolantCells`, `expandAdvancedAlloy` | the three setters | only inside `buildComponentMaterialsMap` / `setGTVersion`, i.e. the thread that writes them | no |
+| the five `public static` recipe fields | the three setters | only inside `MaterialsList` itself (and `MaterialsListTest`) | no |
+| `MaterialsList.componentMaterialsMap` | the three setters (three rebuilds) | `getMaterialsForComponent` (`:236`) ← `Reactor.getMaterials()` (`:177`) ← seven `ReactorPlannerFrame` sites, all in the constructor, the `…ActionPerformed` handlers, `updateReactorButtons` and `updateComparison` | no |
+
+So the finding is **narrower than it reads**: three fields are genuinely read across threads, and those
+are the three that got `volatile`, each with a comment naming both paths. The rest are EDT-only today
+— Swing fires `JComponent` listeners on the EDT, and `AutomationSimulator.doInBackground` never touches
+the recipe map — so making them `volatile` would be cargo-culting rather than a fix, and they are left
+alone and recorded here instead.
+
+**What `volatile` does not fix, and was not claimed to:** a mid-run change is still a *torn run*. A
+simulation that spans `setGTVersion` now sees the new value at an arbitrary tick, so its report mixes
+both versions' numbers. Fixing that means snapshotting the config into the run, which is a much larger
+change — the flags are read from inside `FuelRod` / `Reflector` instances, not from the simulator.
+Recorded as a residual.
+
+🆕 **`MaterialsList.useGTRecipes` (`:17`) is a dead field**: it appears exactly once in the whole tree,
+at its own declaration — never written, never read. Not touched by this commit.
+
+| mutation | result |
+|---|---|
+| drop `volatile` from all three fields | **0 failed** — 511/0 green. A missing `volatile` is a visibility bug, not a behavioural one, and every test here runs from one thread's point of view. Same status as P1-2, recorded so a green run is not mistaken for evidence |
+| corpus after the fix | **0 of 304 designs move** — no calculation touched |
+
+Suite stays **511 passed / 0 failed**; no test can fail against this fix.
 
 ### P3-12 ✅ FIXED 🔍 `ReactorItem.setAutomationThreshold` / `setReactorPause` accept any value
 
@@ -1409,6 +1445,8 @@ design as safe".
    ~~`plannerResized`~~ (P3-7) is **done** — the frame only asks for a resize when the clamp below
    actually moves something, and the icon pass stays unguarded because the two panel handlers call
    it when a panel resized and the frame did not.
+   ~~the config fields read across threads~~ (P3-11) is **done** — three fields volatile, the rest of
+   the finding measured EDT-only, and recorded as not test-observable like P1-2.
 10. ~~**P1-5** the negative-payload refusal~~ — **done and verified**; see above. Found by
     `ReactorCodeFuzzTest`, which is now in the suite: 6 tests over **1 598 generated inputs** (84
     prefixes, 84 deletions, 1 176 substitutions, 14 edge cases, 238 legacy mutations, 2 re-applications),
@@ -1663,8 +1701,8 @@ fails. Two practical warnings, both learned the hard way:
 * **No performance regression guard.** P2-1, P2-2 and P2-3 were measured with a throwaway harness,
   not by a benchmark in the suite. The P2-1 *cache* is pinned (a mutation that stops caching fails),
   and P2-3(a) is pinned by an equivalence test, but nothing fails if any of them is merely slow or poorly bounded.
-* **`volatile` fixes are not test-observable.** P1-2 landed with no test that can fail against it;
-  the mutation table records that as *not caught*. A real guard would need a thread-sanitizer-style
+* **`volatile` fixes are not test-observable.** P1-2 and P3-11 landed with no test that can fail
+  against them; both mutation tables record that as *not caught*. A real guard would need a thread-sanitizer-style
   harness or a deliberately slow interleaving, neither of which JUnit here provides.
 * **P3-4's narrowing has no visible replacement.** With `catch (Exception e)`, a JVM `Error`
   leaves `doInBackground` and is captured by `FutureTask.run()`; it would rethrow as

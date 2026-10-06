@@ -26,8 +26,13 @@ public class FuelRod extends ReactorItem {
     private final int rodCount;
     private final boolean moxStyle;
 
-    private static boolean GT509behavior = false;
-    private static boolean GTNHbehavior = false;
+    // P3-11: written on the EDT by the version-combo handlers (ReactorPlannerFrame.java:2372-2381)
+    // and read from the simulation thread through generateHeat (:177), getEnergy (:188), getHeatBonus
+    // (:208) and generateEnergy (:217), which AutomationSimulator.java:228 and :241 call every tick.
+    // There is no happens-before edge between those two paths, so both flags need volatile: without it
+    // a simulation that is already running may never see a version change the user made mid-run.
+    private static volatile boolean GT509behavior = false;
+    private static volatile boolean GTNHbehavior = false;
 
     private static final int[][] DIRECTIONS = {{1, 0}, {-1, 0}, {0, -1}, {0, 1}};
 
