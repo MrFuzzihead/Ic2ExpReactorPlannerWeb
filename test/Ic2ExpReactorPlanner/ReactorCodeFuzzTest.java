@@ -2,8 +2,10 @@ package Ic2ExpReactorPlanner;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import Ic2ExpReactorPlanner.components.ReactorItem;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -109,6 +111,78 @@ class ReactorCodeFuzzTest {
                 maxHeatAfter,
                 (int) reread.getMaxHeat(),
                 description + " must land on a design whose derived max heat reads back");
+    }
+
+    // ================================================================== bounded fields
+
+    /**
+     * The reactor-level fields {@code buildCodeString()} bounds, and the bound it gives each one.
+     * Kept as a table so the bound tests below walk every entry: a bounded field that is not in
+     * this table is a bounded field no bound test covers.
+     */
+    private static final String[] BOUNDED_FIELDS = {
+            "current heat",
+            "on-pulse",
+            "off-pulse",
+            "suspend temperature",
+            "resume temperature",
+            "max simulation ticks",
+    };
+    private static final int[] BOUNDED_MAXIMA = {
+            (int) 120e3,
+            (int) 5e6,
+            (int) 5e6,
+            (int) 120e3,
+            (int) 120e3,
+            (int) 5e6,
+    };
+
+    private void writeField(Reactor reactor, int field, int value) {
+        switch (field) {
+            case 0:
+                reactor.setCurrentHeat(value);
+                break;
+            case 1:
+                reactor.setOnPulse(value);
+                break;
+            case 2:
+                reactor.setOffPulse(value);
+                break;
+            case 3:
+                reactor.setSuspendTemp(value);
+                break;
+            case 4:
+                reactor.setResumeTemp(value);
+                break;
+            default:
+                reactor.setMaxSimulationTicks(value);
+                break;
+        }
+    }
+
+    private int readField(Reactor reactor, int field) {
+        switch (field) {
+            case 0:
+                return (int) reactor.getCurrentHeat();
+            case 1:
+                return reactor.getOnPulse();
+            case 2:
+                return reactor.getOffPulse();
+            case 3:
+                return reactor.getSuspendTemp();
+            case 4:
+                return reactor.getResumeTemp();
+            default:
+                return reactor.getMaxSimulationTicks();
+        }
+    }
+
+    /** The seed design with one bounded field pushed to {@code value}. */
+    private Reactor seedDesignWithField(int field, int value) {
+        Reactor reactor = populated();
+        reactor.setAutomated(true);
+        writeField(reactor, field, value);
+        return reactor;
     }
 
     // ================================================================== generated families
@@ -236,5 +310,88 @@ class ReactorCodeFuzzTest {
                 componentsAfterFirst,
                 TestSupport.componentsOf(reactor).size(),
                 "the second application must not duplicate components");
+    }
+
+    // ================================================================== bound mismatches
+
+    /**
+     * The bound families. {@link #assertAtomic} asks only whether a mutation lands on one of two
+     * whole states, so it never asks whether a value at the very top of a field's range survives:
+     * a writer bound widened without its reader, or a reader narrowed below its writer, both pass
+     * it untouched. {@code ReactorCodeSerializationTest} catches some of that with hand-built
+     * payloads, which is a list that goes stale; these tests drive every entry of the table above
+     * at its bound and one past it instead.
+     */
+    @Test
+    @DisplayName("a value at a field's writer bound survives the round trip")
+    void writerBoundsRoundTrip() {
+        for (int field = 0; field < BOUNDED_MAXIMA.length; field++) {
+            int bound = BOUNDED_MAXIMA[field];
+            Reactor source = seedDesignWithField(field, bound);
+            String code = assertDoesNotThrow(
+                    () -> source.getCode(),
+                    BOUNDED_FIELDS[field] + " at its writer bound must be writable");
+
+            Reactor read = populated();
+            assertDoesNotThrow(
+                    () -> read.setCode(code), BOUNDED_FIELDS[field] + " at its writer bound must be readable");
+            assertEquals(bound, readField(read, field), BOUNDED_FIELDS[field] + " must read back at its bound");
+            assertEquals(code, read.getCode(), BOUNDED_FIELDS[field] + " at its bound must land on itself");
+        }
+    }
+
+    /**
+     * The reader's bound has to be at least as wide as the writer's, or the top of the writer's
+     * range reads back as something else; {@link #writerBoundsRoundTrip} pins that at the top edge.
+     * This pins the other half: the writer refuses to invent a code it cannot describe, rather than
+     * storing an out-of-range field and letting {@code BigintStorage.extract} read it back as a
+     * remainder.
+     */
+    @Test
+    @DisplayName("one past a writer bound is refused rather than truncated")
+    void onePastEachWriterBoundIsRefused() {
+        for (int field = 0; field < BOUNDED_MAXIMA.length; field++) {
+            int over = BOUNDED_MAXIMA[field] + 1;
+            Reactor reactor = seedDesignWithField(field, over);
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> reactor.getCode(),
+                    BOUNDED_FIELDS[field] + " one past its bound must not be written");
+        }
+    }
+
+    /**
+     * The third bound in the layering, and the one the code tests do not reach today: a component's
+     * own setter is narrower than either code bound, so a code can carry an initial heat the
+     * component will not hold. The point is that refusing it leaves a design the writer can still
+     * describe — a component that clamped into an illegal value instead would leave a reactor whose
+     * {@code getCode()} throws, which is the state {@code setCode} promises never to create.
+     */
+    @Test
+    @DisplayName("a component field the setter refuses still lands on a writable design")
+    void aRefusedComponentFieldStillLandsOnAWritableDesign() {
+        Reactor source = populated();
+        source.setAutomated(true);
+        TestSupport.place(source, 0, 0, "coolantCell60k");
+        ReactorItem cell = source.getComponentAt(0, 0);
+
+        double maxHeat = cell.getMaxHeat();
+        assertTrue(maxHeat > 1, "the seed component has to be one the setters accept at all");
+        cell.setInitialHeat(maxHeat - 1);
+        assertEquals(
+                (int) (maxHeat - 1),
+                (int) cell.getInitialHeat(),
+                "just under the component's own maximum is accepted, and survives the code round trip");
+
+        // The code writer's bound for this field is 1e9, far above what this component can hold, so
+        // the setter has to refuse rather than clamp into a value the writer cannot write back.
+        cell.setInitialHeat(maxHeat);
+        assertTrue(cell.getInitialHeat() < maxHeat, "the setter refuses rather than clamps");
+
+        String code = assertDoesNotThrow(() -> source.getCode(), "the writer still has to describe the design");
+        Reactor read = populated();
+        assertDoesNotThrow(() -> read.setCode(code), "reading it must not throw");
+        assertEquals(code, read.getCode(), "and the design it lands on re-encodes to itself");
+        assertDoesNotThrow(() -> read.getCode(), "setCode must never leave a reactor it cannot write back");
     }
 }

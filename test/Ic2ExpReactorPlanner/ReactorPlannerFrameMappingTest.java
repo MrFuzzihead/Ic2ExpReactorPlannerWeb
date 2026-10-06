@@ -11,6 +11,9 @@ import java.awt.Image;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
+import Ic2ExpReactorPlanner.Reactor;
 import Ic2ExpReactorPlanner.components.ReactorItem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -260,6 +263,37 @@ class ReactorPlannerFrameMappingTest {
         java.awt.Dimension collapsed = ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(0, 0), minimum);
         assertEquals(915, collapsed.width, "a collapsed frame is clamped on both axes");
         assertEquals(700, collapsed.height, "a collapsed frame is clamped on both axes");
+    }
+
+    // ================================================================== threshold spinner bound (P3-12 follow-up)
+
+    /**
+     * The model is a seam for the same reason {@link clampedFrameSize} is: both threshold spinners
+     * are built inside {@code initComponents}, which sits in the generated half of a frame that
+     * cannot be constructed headless. Pinning the model is what keeps the spinner's declared range
+     * and the code format's bound from drifting apart.
+     */
+    @Test
+    @DisplayName("the threshold spinner offers the range the code format can carry")
+    void thresholdSpinnerModelSpansTheCodeBound() {
+        SpinnerNumberModel model = ReactorPlannerFrame.automationThresholdModel(9000);
+        assertEquals("0", String.valueOf(model.getMinimum()), "the floor");
+        assertEquals(
+                String.valueOf(Reactor.MAX_AUTOMATION_THRESHOLD),
+                String.valueOf(model.getMaximum()),
+                "the writer's bound, not Reactor.MAX_COMPONENT_HEAT");
+        assertEquals("1", String.valueOf(model.getStepSize()), "one at a time");
+        JSpinner spinner = new JSpinner();
+        spinner.setModel(model);
+        assertEquals("9000", String.valueOf(spinner.getValue()), "the default threshold");
+        spinner.setValue(Reactor.MAX_AUTOMATION_THRESHOLD);
+        assertEquals(
+                String.valueOf(Reactor.MAX_AUTOMATION_THRESHOLD),
+                String.valueOf(spinner.getValue()),
+                "the largest encodable threshold is displayable");
+        assertTrue(
+                Reactor.MAX_AUTOMATION_THRESHOLD > Reactor.MAX_COMPONENT_HEAT,
+                "the spinner used to stop below a value a rev-4 code can legitimately carry");
     }
 
     // ================================================================== resource bundle

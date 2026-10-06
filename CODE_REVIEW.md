@@ -854,6 +854,60 @@ No test can reach the catch: nothing in the suite or the 304-design corpus throw
 is the inner `IOException` one at `:140`, for the CSV header). Same "not test-observable" status
 as the P1-2 `volatile` fixes, which the suite already documents as a gap.
 
+### P3-4 follow-up ✅ CLOSED — the Error now says so in the report
+
+The residual above ("a propagated `Error` is now **silent** in the GUI") is closed. `ReactorPlannerFrame`
+drives the worker with `execute()` plus a property listener and never calls `get()`, so the captured
+`Error` reached nothing: the report simply stopped mid-run and read as a complete result.
+
+`AutomationSimulator.java` gains a second clause on the same `try`:
+
+```java
+} catch (Throwable e) {
+    if (cooldownTicks == 0) {
+        publish(formatI18n("Simulation.ErrorReactor", reactorTicks));
+    } else {
+        publish(formatI18n("Simulation.ErrorCooldown", cooldownTicks));
+    }
+    publish(abortedReport(e));
+    if (csvOut != null) {
+        csvOut.close();
+    }
+    throw e;
+}
+```
+
+Three things, each deliberate:
+
+* **The context line is reused**, not invented — `Simulation.ErrorReactor` / `Simulation.ErrorCooldown`
+  are the entries the `Exception` clause already prints, so the user sees the same "where it stopped"
+  shape they already recognise.
+* **`abortedReport(Throwable)` is a new `static` seam** returning `formatI18n("Simulation.AbortedByError", error)`.
+  It names the error and its message and deliberately **omits the stack trace** — the trace, not the
+  `Error`, is what made the original `catch (Throwable)` read as a plausible result.
+* **It rethrows.** SwingWorker still captures the failure in its `FutureTask`, so a caller that *does*
+  call `get()` still sees `java.util.concurrent.ExecutionException`. The frame does not call `get()`;
+  rendering from inside the worker is the third option the review did not list, and it keeps the EDT
+  responsive, which a `get()` on the click path would not.
+
+`Simulation.AbortedByError=Simulation aborted by a JVM error: %s\n` is added to `Bundle.properties`
+only. `Bundle_zh_CN.properties` does not carry it, following the precedent of the two keys that are
+already English-only (`Simulation.EUOutputsBeforeOverheated`, `Simulation.HeatOutputsBeforeOverheated`),
+which the shipped simulator path reads today.
+
+| mutation | result |
+|---|---|
+| `abortedReport` → `formatI18n(..., Arrays.toString(error.getStackTrace()))` | **1 failed** — `the abort line names the error and carries no stack trace` |
+| `Simulation.AbortedByError` commented out of the bundle | **1 failed** — `java.util.MissingResourceException`, so the key is wired through the bundle and not hardcoded |
+| the `catch (Throwable e)` clause deleted | **0 failed** — still not test-observable; see below |
+
+**What is still not pinned, and cannot be:** the clause itself. Nothing in the suite or the 304-design
+corpus throws inside `doInBackground`, and there is no seam to inject an `Error` into a real run, so
+`AutomationSimulatorTest.AbortedRun` pins the *shape* of the line the clause publishes and the
+capture semantics its rethrow relies on — a `SwingWorker` whose `doInBackground` throws a JVM `Error`,
+run and asserted to surface at `get()` as `java.util.concurrent.ExecutionException` — but not the
+clause. Same "not test-observable" status as the P1-2 `volatile` fixes.
+
 ### P3-5 ✅ FIXED — `GGFuelRod` carries three dead members that shadow live `FuelRod` state
 
 ```
@@ -1506,8 +1560,11 @@ design as safe".
    guard~~ (P3-6), ~~the `Vent` null `parent`~~ (P3-13) and ~~the `getMaterials()` null recipe~~
    (P3-9) are **done**; P3-16 is **retracted** (the pass-through is the game's rule, and relaxing
    it makes 4/304 designs look safe). ~~the setter bounds~~ (P3-12) are **done** — the pause is
-   bounded to the range the code format can carry, the threshold only below, since it serves the
-   heat and the damage scale at once. ~~the `TextureFactory` fallback loop~~ (P3-8) is **done** —
+   bounded to the range the code format can carry, and the threshold follow-up landed with this
+   release: `Reactor.MAX_AUTOMATION_THRESHOLD` is now stated once and shared by the writer, the
+   setter guard and both spinner sites (see
+   [Gaps worth closing](#gaps-worth-closing)). The threshold is *not* clamped to the heat scale;
+   capacity stays unbounded above, only the encodable range is refused. ~~the `TextureFactory` fallback loop~~ (P3-8) is **done** —
    display-only, no calculation touched, pinned by a new `TextureFactoryTest`.
    ~~the stale `lastEUoutput`~~ (P3-2) is **done** — the pair is dead, not merely idempotent.
    ~~`plannerResized`~~ (P3-7) is **done** — the frame only asks for a resize when the clamp below
@@ -1519,11 +1576,11 @@ design as safe".
    the same slot as the mode-derived one, so it replaces it; composing would move 74 of 304 designs.
    ~~the dead `useGTRecipes` field~~ (P3-20) is **done** — it was superseded by the `gtVersion`
    selector while still unreleased (0e29d80), and deleting an unread private field moves nothing.
-10. ~~**P1-5** the negative-payload refusal~~ — **done and verified**; see above. Found by
-    `ReactorCodeFuzzTest`, which is now in the suite: 6 tests over **1 598 generated inputs** (84
+9. ~~**P1-5** the negative-payload refusal~~ — **done and verified**; see above. Found by
+    `ReactorCodeFuzzTest`, which is now in the suite: 9 tests over **1 598 generated inputs** (84
     prefixes, 84 deletions, 1 176 substitutions, 14 edge cases, 238 legacy mutations, 2 re-applications),
-    and the invariant is that `setCode` ends in one of two whole states.
-9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
+    plus **13 bound-driven cases** — see *Bound coverage* below.
+10. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge. The code-format bound follow-up is
    **done** too — see P3-3.
 11. ~~**P3-19** the exploding-run output totals~~ — **done and verified**; see above. The corpus
@@ -1532,7 +1589,7 @@ design as safe".
 
 ## Testing
 
-A 512-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 523-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -1658,6 +1715,26 @@ populated design — quad rod, plating, fluid, pulsed, heat, a custom tick limit
  deletion, every single-character substitution over a 14-character troublemaker alphabet, and a list
 of edge junk. Generation is deterministic, so a failure is reproducible from the seed alone.
 
+#### Bound coverage
+
+Atomicity alone cannot see a bound: a writer widened without its reader, or a reader narrowed below
+its writer, leaves every mutation still landing on one of the two whole states. Three generated
+families close that hole, driven off a table of the reactor-level fields `buildCodeString()` bounds
+(current heat, on/off pulse, suspend/resume temperature, tick limit) so a bounded field left out of
+the table is a bounded field nothing covers:
+
+* **At the bound, the round trip is exact.** `getCode()` writes it, `setCode()` reads it back
+  unchanged, and the code re-encodes to itself. This is the guard against the two bounds drifting
+  apart — `BigintStorage.extract` does not range-check, it takes a remainder, so a mismatched pair
+  silently reads a shifted value rather than failing.
+* **One past the bound, the writer refuses.** `getCode()` throws `IllegalArgumentException` rather
+  than storing an out-of-range field that the reader would then read back as a remainder.
+* **A component field the setter refuses still lands on a writable design.** The component's own
+  setter is narrower than either code bound (`setInitialHeat` takes `value < maxHeat`, the code
+  carries up to 1e9), so a code can name a heat the component will not hold. Refusing it has to
+  leave a design `getCode()` can still describe; clamping into an illegal value would leave the
+  reactor in the one state `setCode` promises never to create.
+
 The property is the one the parser's reputation needs: `setCode` is atomic. Each input must end in
 one of exactly two states — the reactor byte-for-byte as it was (with the derived max heat, the heat
 and the tick limit each checked separately, since plating and the tick limit are the fields a
@@ -1704,7 +1781,7 @@ reading the text. Any new test asserting on report text must do the same.
 The suite was validated by mutation testing: 13 bugs injected into `src/` one at a time, with
 `src/` restored after each. **All 13 were caught.** Re-run after each fix, all were still caught; 14 further rows were
 added as the fixes landed — single-tier partial reverts, the over-correction, four P0-2 variants,
-the P1-1 parsing cases, and the P1-3 cancel-path cases. A full run takes about 20 seconds.
+the P1-1 parsing cases, and the P1-3 cancel-path cases, and the three code-bound cases above. A full run takes about 20 seconds.
 
 | Injected bug | Result |
 |---|---|
@@ -1721,6 +1798,9 @@ the P1-1 parsing cases, and the P1-3 cancel-path cases. A full run takes about 2
 | `AutomationSimulator`: skip `handleAutomation` | 5 failed |
 | `MaterialsList`: dual rod costs 3 rods instead of 2 | 1 failed |
 | `BigintStorage.extract`: `max + 1` → `max` | 59 failed |
+| Code reader: `extract(CODE_HEAT_BOUND)` → `extract(60e3)` | 40 failed (incl. `writerBoundsRoundTrip`) |
+| Code writer: `store(currentHeat, CODE_HEAT_BOUND)` → `store(…, 240e3)` | 41 failed (incl. `onePastEachWriterBoundIsRefused`) |
+| `ReactorItem.setInitialHeat`: refuse → clamp at `maxHeat` | 5 failed (incl. `aRefusedComponentFieldStillLandsOnAWritableDesign`) |
 | P0-1 revert: any single cascade tier back to `switchSide` | 3 × failed |
 | P0-1 over-correction: the *side* block switched too | failed |
 | P0-2 reverted to the old bound | failed |
@@ -1769,26 +1849,48 @@ fails. Two practical warnings, both learned the hard way:
   (`clampedFrameSize`). The generated Swing in `initComponents` (~2 400 lines) remains untested,
   and the two lines of P3-7 that honour the clamp's `null` sit in that untested half — the frame
   cannot even be constructed headlessly (`java.awt.HeadlessException` from `java.awt.Window.<init>`).
-* ~~**No fuzz or property test on `Reactor.setCode`.**~~ Closed by `ReactorCodeFuzzTest`, but only
-  for the parser's atomicity: it does not cover reader/writer bound mismatches, where a widened
-  reader bound was caught by a hand-written test rather than by the harness.
+* ~~**No fuzz or property test on `Reactor.setCode` — and no bound coverage in it.**~~ **Closed** on
+  both counts: `ReactorCodeFuzzTest` covers atomicity (1 598 generated mutations) *and*, since the
+  bound families above were added, the reader/writer bound mismatches — every bounded reactor-level
+  field at its bound and one past it, plus the component setter that sits under both bounds. The
+  hand-built payloads in `ReactorCodeSerializationTest` remain as the per-revision ladder cases.
 * **No performance regression guard.** P2-1, P2-2 and P2-3 were measured with a throwaway harness,
   not by a benchmark in the suite. The P2-1 *cache* is pinned (a mutation that stops caching fails),
   and P2-3(a) is pinned by an equivalence test, but nothing fails if any of them is merely slow or poorly bounded.
 * **`volatile` fixes are not test-observable.** P1-2 and P3-11 landed with no test that can fail
   against them; both mutation tables record that as *not caught*. A real guard would need a thread-sanitizer-style
   harness or a deliberately slow interleaving, neither of which JUnit here provides.
-* **P3-4's narrowing has no visible replacement.** With `catch (Exception e)`, a JVM `Error`
-  leaves `doInBackground` and is captured by `FutureTask.run()`; it would rethrow as
-  `java.util.concurrent.ExecutionException` at `get()`, which `ReactorPlannerFrame` never calls,
-  so the GUI now shows a report that simply stops. A guard would need the frame to call `get()`
-  (or install a listener) and render that exception.
-* **`TextureFactory`'s zip branch is still uncovered.** `TextureFactoryTest` now drives the
-  classpath branch, including the P3-8 fallback, but `TEXTURE_PACK` is null in a headless run
-  unless an `erpprefs.xml` in the working directory names a real zip, so the zip branch and its
-  `ASSET_PATHS` walk remain untested.
-* **The GUI spinner bound is smaller than the code format's.** `thresholdSpinner` is a
-  `SpinnerNumberModel(9000, 0, Reactor.MAX_COMPONENT_HEAT, 1)` (1.08e6), but a rev-4 code carries
-  a threshold up to 1e9 and round-trips it exactly, so `thresholdSpinner.setValue(component.getAutomationThreshold())`
-  (`ReactorPlannerFrame.java:195/196`) can be handed a legitimate value the model rejects. P3-12
-  deliberately did *not* clamp the data to the spinner bound; the fix is to widen the model.
+* ~~**P3-4's narrowing has no visible replacement.**~~ **Closed** — see
+  [P3-4 follow-up](#p3-4-follow-up--the-error-now-says-so-in-the-report). A JVM `Error` now prints
+  the same "where it stopped" line the `Exception` path prints, plus one line naming the error and
+  its message, with no stack trace, and still rethrows so the `FutureTask` keeps it. What remains
+  untested is the clause itself, which no run in the suite or the corpus can reach.
+* ~~**`TextureFactory`'s zip branch is still uncovered.**~~ **Closed.** `getImage` was split into
+  `getImageFromPack(ZipFile, String...)` and `getTexturePackZip(String configPath)` — the pack and
+  the preferences path are arguments, the loop bodies are the shipped ones — and
+  `TextureFactoryTest.ZipBranch` drives them with a committed fixture zip
+  (`testResources/texture-pack-probe.zip`, entries named with the real `ASSET_PATHS`). Five tests
+  now pin the walk: an entry resolves at the empty path, at `assets/ic2/textures/items/`, at the
+  deepest path, and at a *later* `ASSET_PATHS` entry; the name loop is outside the path loop, so
+  the first name wins even when only the second name has an earlier path (pinned by comparing the
+  chosen image's pixels against both entries read straight); a name the pack does not carry is no
+  image; and a null pack is skipped rather than dereferenced. Reverting the `asset_path + imageName`
+  prefix fails two of them. **Residual:** only the missing-file path of `getTexturePackZip` is
+  covered. The XML half needs a `Properties.loadFromXML` fixture, and this toolchain's parser
+  rejects every DOCTYPE form tried (`http://java.com/schemas/properties/` reports
+  *Invalid system identifier*; an internal subset parses but records no properties), so no
+  accepted form was established and those cases are left untested rather than guessed.
+* ~~**The GUI spinner bound is smaller than the code format's.**~~ **Closed, and the finding was
+  re-framed.** The review claimed `thresholdSpinner.setValue(...)` can be handed a value "the model
+  rejects". Measured with a throwaway test: `SpinnerNumberModel(9000, 0, 1_080_000, 1)` and
+  `setValue(500_000_000)` **does not throw and does not clamp** — `String.valueOf(s.getValue())`
+  reads back `"500000000"`. So the defect was a declaration/behaviour mismatch (the model *claims*
+  a 1.08e6 ceiling and does not enforce it), not a crash, which is why it never showed up as a
+  failure. The fix names the bound once — `Reactor.MAX_AUTOMATION_THRESHOLD = (int) 1e9` — and uses
+  it in the writer, the setter guard (`components/ReactorItem.java`) and both spinner sites via a
+  new static seam, `automationThresholdModel(int initial)`. The reader is untouched: its bound comes
+  from the revision ladder (rev 4 → 1e9), so old files still load. Pinned by
+  `ReactorItemTest.thresholdIsBoundedToTheCodeFormat` (5e8 accepted, `MAX` accepted, `MAX + 1`
+  refused, `-1` refused, and a `getCode()` round trip at 1e9) and
+  `ReactorPlannerFrameMappingTest.thresholdSpinnerModelSpansTheCodeBound`. Both mutations — frame
+  helper back to `MAX_COMPONENT_HEAT`, setter guard back to lower-bound-only — fail the suite.

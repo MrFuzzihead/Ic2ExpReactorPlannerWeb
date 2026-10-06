@@ -11,8 +11,10 @@ import Ic2ExpReactorPlanner.components.Condensator;
 import Ic2ExpReactorPlanner.components.CoolantCell;
 import Ic2ExpReactorPlanner.components.ReactorItem;
 import java.io.File;
+import java.util.concurrent.ExecutionException;
 import java.util.List;
 import javax.swing.JPanel;
+import javax.swing.SwingWorker;
 import javax.swing.JTextArea;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -877,6 +879,55 @@ class AutomationSimulatorTest {
             assertTrue(report.contains(marker), "the cancel branch ran: " + report);
             org.junit.jupiter.api.Assertions.assertNotNull(
                     simulator.getData(), "a cancelled run is a finished run, so getData() is available");
+        }
+    }
+
+    /**
+     * P3-4's residual, now closed. The catch in {@code doInBackground} is narrowed to {@code
+     * Exception}, so a JVM {@code Error} leaves the worker and SwingWorker captures it in its
+     * {@code FutureTask} — and {@code ReactorPlannerFrame} drives the worker with {@code execute()}
+     * plus a property listener and never calls {@code get()}, so the report used to simply stop
+     * mid-run and read as a complete result. {@link abortedReport} is the visible half of the fix,
+     * and the clause that calls it rethrows, which the second test below pins.
+     *
+     * <p><b>What is not pinned here, and cannot be:</b> nothing in the suite or in the 304-design
+     * corpus throws inside {@code doInBackground}, so the catch clause itself has no seam. These
+     * tests pin the shape of the line it publishes and the capture semantics the rethrow relies on,
+     * not the clause.
+     */
+    @Nested
+    @DisplayName("a run aborted by a JVM Error")
+    class AbortedRun {
+
+        @Test
+        @DisplayName("the abort line names the error and carries no stack trace")
+        void abortLineNamesTheErrorAndNoFrame() {
+            String line = AutomationSimulator.abortedReport(new Error("boom"));
+            String marker = BundleHelper.getI18n("Simulation.AbortedByError").split("%")[0];
+            assertTrue(line.contains(marker), "the bundle entry is what shows: " + line);
+            assertTrue(line.contains("java.lang.Error"), "the class is named: " + line);
+            assertTrue(line.contains("boom"), "the message is kept: " + line);
+            assertFalse(line.contains("AutomationSimulator"), "no frame from a trace: " + line);
+            assertFalse(line.contains("doInBackground"), "no frame from a trace: " + line);
+        }
+
+        @Test
+        @DisplayName("an Error thrown under the worker still surfaces at get()")
+        void errorThrownUnderTheWorkerIsCapturedNotLost() throws Exception {
+            SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    throw new Error("worker-boom");
+                }
+            };
+            worker.execute();
+            try {
+                worker.get();
+                assertTrue(false, "get() should have thrown; the Error was swallowed");
+            } catch (ExecutionException ex) {
+                assertTrue(String.valueOf(ex.getMessage()).contains("worker-boom"),
+                        "the Error reached get(): " + ex.getMessage());
+            }
         }
     }
 

@@ -529,8 +529,9 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
         } catch (Exception e) {
             // P3-4: narrowed from Throwable. A JVM Error (OutOfMemoryError, StackOverflowError)
             // is not a simulation failure the user can act on, and dumping its stack trace into
-            // the report area read as a plausible result. Errors now leave doInBackground; SwingWorker
-            // captures them in its FutureTask, so they surface at get() rather than in the report.
+            // the report area read as a plausible result. Errors go to the clause below instead,
+            // which says that the run stopped without printing the trace, and then rethrows so
+            // SwingWorker's FutureTask still captures it.
             if (cooldownTicks == 0) {
                 publish(formatI18n("Simulation.ErrorReactor", reactorTicks));
             } else {
@@ -540,6 +541,24 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             if (csvOut != null) {
                 csvOut.close();
             }
+        } catch (Throwable e) {
+            // P3-4's residual, now closed: the narrowing above leaves an Error to be captured by
+            // SwingWorker's FutureTask, and ReactorPlannerFrame drives the worker with execute()
+            // plus a property listener and never calls get(), so the report simply stopped mid-run
+            // and read as a complete result. Say that it stopped, and where; keep the stack trace
+            // out of the report, since the trace is what made the old Throwable catch plausible.
+            // Rethrow so the FutureTask still captures it and a caller that does call get() still
+            // sees it as java.util.concurrent.ExecutionException.
+            if (cooldownTicks == 0) {
+                publish(formatI18n("Simulation.ErrorReactor", reactorTicks));
+            } else {
+                publish(formatI18n("Simulation.ErrorCooldown", cooldownTicks));
+            }
+            publish(abortedReport(e));
+            if (csvOut != null) {
+                csvOut.close();
+            }
+            throw e;
         }
         long endTime = System.nanoTime();
         publish(formatI18n("Simulation.ElapsedTime", (endTime - startTime) / 1e9));
@@ -917,6 +936,17 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                 }
             }
         }
+    }
+
+    /**
+     * What a run aborted by a JVM `Error` says about it. Extracted static so a test can pin the
+     * shape: nothing in the suite or the 304-design corpus throws inside `doInBackground`, so the
+     * catch itself has no seam (see CODE_REVIEW.md). Deliberately the error itself and not its
+     * stack trace — the trace in the report area is what made the old `catch (Throwable)` read as
+     * a plausible result.
+     */
+    public static String abortedReport(final Throwable error) {
+        return formatI18n("Simulation.AbortedByError", error);
     }
 
     // P2-3(a): String.matches recompiles the pattern on every call, and process() runs on the EDT

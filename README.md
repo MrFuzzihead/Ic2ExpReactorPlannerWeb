@@ -33,19 +33,22 @@ Development
 ./gradlew test --tests '*FuelRodTest'           # one class or nested class
 ```
 
-The suite is 458 JUnit 5 tests and runs headless in about 20 seconds. It covers the component
+The suite is 523 JUnit 5 tests and runs headless in about 20 seconds. It covers the component
 calculation logic, the tick simulation loop, and reactor code serialization. Two things are
 worth knowing before you change a formula:
 
-* **Some tests pin behaviour that is known to be wrong.** The `Current…` tests in
-  `ExchangerTest` and `CondensatorTest` characterise today's output for the two P0 bugs, and the
-  matching `@Disabled` tests state the intended behaviour. Fixing a bug means the
-  characterisation tests fail, the contract tests pass, and the skipped count drops — not
-  editing the expectation to whatever the code now does.
+* **The corpus is the alarm, not a test you can edit.** Both P0 bugs from
+  [`CODE_REVIEW.md`](CODE_REVIEW.md) are fixed and every test asserts the intended behaviour, so
+  there is nothing skipped and no characterisation test to keep green. A deliberate change to a
+  formula is reviewed by the corpus diff below, and by the "EVERY changed design is tagged" line
+  it prints.
 * **Some tests pin behaviour that is subtle but correct.** `ReactorItemTest` and
   `PassiveComponentsTest` document real edge cases (a broken component's `adjustCurrentHeat`
-  is an unclamped pass-through; overfill refusal is off by one; `Plating` is the only type with
+  is an unclamped pass-through; overfill refusal is exact; `Plating` is the only type with
   no tooltip override). Those are not bugs to be "fixed" — read the comment before changing one.
+* **`ReactorCodeFuzzTest` generates its inputs.** It mutates one populated design ~1 600 ways and
+  asserts `setCode` is atomic, and it walks every bounded code field at its bound and one past it.
+  A new bounded field belongs in that table, not in a hand-written case.
 
 ### The simulation corpus
 
@@ -71,6 +74,8 @@ actually looks at it.
 
 ### Documentation
 
+* [`RELEASE_NOTES.md`](RELEASE_NOTES.md) — what changed since the last release tag, including the
+  designs whose reported numbers move and the findings that were deliberately *not* changed.
 * [`CODE_REVIEW.md`](CODE_REVIEW.md) — a full review of the codebase: two P0 bugs in the
   heat-transfer formulas, crash and data-race findings, measured performance work, and dead
   code. It also records what was checked and *cleared* as not-a-bug, so those do not get

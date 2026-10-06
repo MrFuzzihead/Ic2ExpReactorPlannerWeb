@@ -170,8 +170,8 @@ class ReactorItemTest {
         }
 
         @Test
-        @DisplayName("a threshold is bounded only below")
-        void thresholdIsBoundedOnlyBelow() {
+        @DisplayName("a threshold is bounded to the range the code format can carry")
+        void thresholdIsBoundedToTheCodeFormat() {
             ReactorItem item = ComponentFactory.createComponent("coolantCell60k");
 
             item.setAutomationThreshold(500_000_000);
@@ -179,8 +179,35 @@ class ReactorItemTest {
                     500_000_000,
                     item.getAutomationThreshold(),
                     "a rev-4 code legitimately carries a threshold above the component's capacity");
+            item.setAutomationThreshold(Reactor.MAX_AUTOMATION_THRESHOLD);
+            assertEquals(
+                    Reactor.MAX_AUTOMATION_THRESHOLD,
+                    item.getAutomationThreshold(),
+                    "the writer's own bound is accepted, so the round trip below is possible");
+            item.setAutomationThreshold(Reactor.MAX_AUTOMATION_THRESHOLD + 1);
+            assertEquals(
+                    Reactor.MAX_AUTOMATION_THRESHOLD,
+                    item.getAutomationThreshold(),
+                    "one past the bound is refused, not clamped down to it");
             item.setAutomationThreshold(-1);
-            assertEquals(500_000_000, item.getAutomationThreshold(), "a negative is refused");
+            assertEquals(Reactor.MAX_AUTOMATION_THRESHOLD, item.getAutomationThreshold(), "a negative is refused");
+
+            // Keeping the stored value inside the writer's bound is what makes getCode() work at
+            // all: an out-of-range threshold throws a bare IllegalArgumentException out of
+            // BigintStorage.store, on the reactor that is already fully applied (CODE_REVIEW.md P3-12
+            // and P1-5). The reader takes its threshold bound from the revision ladder, which is the
+            // same number for the revision 4 codes this build writes, so the value survives.
+            Reactor reactor = new Reactor();
+            reactor.setAutomated(true);
+            ReactorItem placed = place(reactor, 2, 2, "coolantCell60k");
+            placed.setAutomationThreshold(Reactor.MAX_AUTOMATION_THRESHOLD);
+            String code = reactor.getCode();
+            Reactor back = new Reactor();
+            back.setCode(code);
+            assertEquals(
+                    Reactor.MAX_AUTOMATION_THRESHOLD,
+                    back.getComponentAt(2, 2).getAutomationThreshold(),
+                    "the largest encodable threshold survives the code");
         }
     }
 

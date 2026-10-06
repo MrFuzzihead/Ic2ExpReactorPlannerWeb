@@ -54,12 +54,16 @@ public class ReactorItem {
         return automationThreshold;
     }
 
-    // Only bounded below. The field is compared against current heat on one automation path and
-    // against current damage on another, so it has no single meaningful upper bound, and a rev-4
-    // code legitimately carries a threshold up to 1e9 (the writer stores it with that bound).
-    // No code reader or GUI spinner can produce a negative today, so the guard is insurance.
+    // Bounded below and above, but deliberately not to this component's capacity. The field is
+    // compared against current heat on one automation path and against current damage on another,
+    // so it has no single meaningful upper bound and a threshold above the component's own capacity
+    // is coherent intent ("never automate this part") that must survive. What is refused is the
+    // range the code format cannot carry: a value the writer cannot store would make the *next*
+    // getCode() throw a bare IllegalArgumentException out of BigintStorage.store. A rev-4 code
+    // legitimately carries any value in that range, and no code reader or GUI spinner can produce
+    // a negative today, so the lower guard is insurance (CODE_REVIEW.md P3-12 and its follow-up).
     public void setAutomationThreshold(final int value) {
-        if ((maxHeat > 1 || maxDamage > 1) && value >= 0) {
+        if ((maxHeat > 1 || maxDamage > 1) && value >= 0 && value <= Reactor.MAX_AUTOMATION_THRESHOLD) {
             automationThreshold = value;
         }
     }

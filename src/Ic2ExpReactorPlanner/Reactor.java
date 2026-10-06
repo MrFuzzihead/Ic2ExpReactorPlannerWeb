@@ -68,6 +68,12 @@ public class Reactor {
 
     public static final int MAX_COMPONENT_HEAT = 1_080_000;
 
+    // The largest automation threshold this build's code writer can encode. readCodeString takes
+    // its threshold bound from the revision ladder, which is 1e9 for the revision 4 codes this
+    // build writes, so writer and reader agree on this number; the GUI spinner is bounded by it
+    // too, which is why the constant is public (CODE_REVIEW.md P3-12 follow-up).
+    public static final int MAX_AUTOMATION_THRESHOLD = (int) 1e9;
+
     public ReactorItem getComponentAt(final int row, final int column) {
         if (row >= 0 && row < grid.length && column >= 0 && column < grid[row].length) {
             return grid[row][column];
@@ -767,7 +773,7 @@ public class Reactor {
                                     != ComponentFactory.getDefaultComponent(id).getReactorPause()) {
                         if (automated) {
                             storage.store(component.getReactorPause(), (int) 10e3);
-                            storage.store(component.getAutomationThreshold(), (int) 1e9);
+                            storage.store(component.getAutomationThreshold(), MAX_AUTOMATION_THRESHOLD);
                         }
                         storage.store((int) component.getInitialHeat(), (int) 1e9);
                         storage.store(1, 1);

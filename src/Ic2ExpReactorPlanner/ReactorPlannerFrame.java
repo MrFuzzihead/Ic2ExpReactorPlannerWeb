@@ -1300,7 +1300,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         temperatureAndComponentsPanel.add(placingThresholdLabel, gridBagConstraints);
 
-        placingThresholdSpinner.setModel(new javax.swing.SpinnerNumberModel(9000, 0, Reactor.MAX_COMPONENT_HEAT, 1));
+        placingThresholdSpinner.setModel(automationThresholdModel(9000));
         placingThresholdSpinner.setMinimumSize(new java.awt.Dimension(100, 20));
         placingThresholdSpinner.setPreferredSize(new java.awt.Dimension(100, 20));
         placingThresholdSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1569,7 +1569,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         automationPanel.add(jLabel12, gridBagConstraints);
 
-        thresholdSpinner.setModel(new javax.swing.SpinnerNumberModel(9000, 0, Reactor.MAX_COMPONENT_HEAT, 1));
+        thresholdSpinner.setModel(automationThresholdModel(9000));
         thresholdSpinner.setMinimumSize(new java.awt.Dimension(100, 20));
         thresholdSpinner.setPreferredSize(new java.awt.Dimension(100, 20));
         thresholdSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1949,6 +1949,20 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         } else {
             button.setIcon(null);
         }
+    }
+
+    /**
+     * P3-12 follow-up seam: the spinner model behind both automation-threshold spinners. The bound
+     * is the code format's, not {@code Reactor.MAX_COMPONENT_HEAT}: a rev-4 code legitimately
+     * carries a threshold up to {@link Reactor.MAX_AUTOMATION_THRESHOLD}, and the spinner used to
+     * declare a maximum nearly a thousand times smaller. Measured on the JDK's own {@code JSpinner},
+     * {@code setValue} handed an out-of-range value neither throws nor clamps — it stores it — so
+     * the old model was not a crash risk, it was a declaration that no longer described what the
+     * spinner can hold, which is what makes its step semantics wrong for legitimate codes. Static
+     * so a headless test can reach it, like {@link clampedFrameSize}.
+     */
+    public static javax.swing.SpinnerNumberModel automationThresholdModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_AUTOMATION_THRESHOLD, 1);
     }
 
     /**
