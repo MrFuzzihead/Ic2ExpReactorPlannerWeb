@@ -19,9 +19,9 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 5 (4 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (15 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (16 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **509** |
+| **Covered by an automated regression test**  | **511** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -37,7 +37,7 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-2 the stale `lastEUoutput`, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals — **all fixed and verified**;
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals and P3-7 the resize guard — **all fixed and verified**;
 P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
@@ -933,10 +933,38 @@ figure. So the review's correction was right, and the guard is a pure consistenc
 | drop the guard (as shipped before) | **1 failed** — `PassiveComponentsTest.coolingCreditIgnoresDraining`, the test that pins the new behaviour |
 | drop the `super` call too (`return heat;`) | **35 failed** and **12 of 304** corpus designs move — the delegation is load-bearing, the guard is not |
 
-### P3-7 ⚠️ `plannerResized` calls `setSize()` from inside its own `componentResized` handler
+### P3-7 ✅ FIXED 🔍 `plannerResized` calls `setSize()` from inside its own `componentResized` handler
 
 `ReactorPlannerFrame.java:1889-1899` — resize-feedback / flicker risk, and it runs the
 127-icon rebuild from P2-1 on every event. Guard on an actual size change.
+
+#### ✅ Applied and verified — no calculation touched
+
+The handler clamped the frame's current size to its minimum and then asked for it *unconditionally*,
+so a frame that already honoured its minimum still issued a resize request — issued from inside the
+very handler Swing fires to service a resize. That is the feedback loop behind the flicker.
+
+The clamp and the decision moved into `clampedFrameSize(current, minimum)`, which returns the size
+to ask for, or `null` when the frame already honours its minimum and needs no request at all; the
+handler asks only when that is non-null. **The icon pass below stays unguarded on purpose**:
+`reactorPanelComponentResized` and `componentsPanelComponentResized` call this method when a *panel*
+resized and the frame did not, and that is exactly when the icons have to be rescaled — guarding the
+whole handler on the frame's size would have dropped that case.
+
+**The frame cannot be instantiated in the test JVM**, measured rather than assumed: `new
+ReactorPlannerFrame()` throws `java.awt.HeadlessException` out of `java.awt.Window.<init>`
+(`java.awt.GraphicsEnvironment.checkHeadless`) — a `JFrame` needs a display before its constructor
+runs. So the seam is the only reachable part of the handler, and it is a `public static` in the same
+file, following the `getCachedIcon` / `setComponentIcon` precedent.
+
+| mutation | result |
+|---|---|
+| let the seam accept every resize (drop the `return null`) | **1 failed** — `aFrameAtOrAboveItsMinimumAsksForNoResize` |
+| clamp the width only (drop the height clamp) | **1 failed** — `aFrameBelowItsMinimumIsClamped` |
+| keep the seam but call `setSize` unconditionally in the handler | **0 failed** — *not observable*: the two lines that honour the `null` sit in a method on a class that cannot be constructed headlessly. Recorded rather than hidden, same as the `volatile` half of P1-2 |
+| corpus after the fix | **0 of 304 designs move** — no calculation touched |
+
+Suite is now **511 passed / 0 failed** (two tests added to `ReactorPlannerFrameMappingTest`).
 
 ### P3-8 ✅ FIXED 🔍 `TextureFactory` classpath fallback only tries `imageNames[0]`
 
@@ -1378,7 +1406,9 @@ design as safe".
    heat and the damage scale at once. ~~the `TextureFactory` fallback loop~~ (P3-8) is **done** —
    display-only, no calculation touched, pinned by a new `TextureFactoryTest`.
    ~~the stale `lastEUoutput`~~ (P3-2) is **done** — the pair is dead, not merely idempotent.
-   Remaining in this item: `plannerResized` (P3-7).
+   ~~`plannerResized`~~ (P3-7) is **done** — the frame only asks for a resize when the clamp below
+   actually moves something, and the icon pass stays unguarded because the two panel handlers call
+   it when a panel resized and the frame did not.
 10. ~~**P1-5** the negative-payload refusal~~ — **done and verified**; see above. Found by
     `ReactorCodeFuzzTest`, which is now in the suite: 6 tests over **1 598 generated inputs** (84
     prefixes, 84 deletions, 1 176 substitutions, 14 edge cases, 238 legacy mutations, 2 re-applications),
@@ -1392,7 +1422,7 @@ design as safe".
 
 ## Testing
 
-A 509-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 511-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -1504,7 +1534,7 @@ Two environment notes:
 | `MaterialsListTest` | Recipe aggregation, every component has a recipe, GT-version and flag variants, comparison rendering. |
 | `ComponentFactoryTest` | The id/name registries, copy-on-create, subclass preservation, tooltip coverage. |
 | `BigintStorageTest` | Field packing order, bounds checking, Base64 round-trip. |
-| `ReactorPlannerFrameMappingTest` | The register-name mapping, and that every tooltip label resolves to a real component. |
+| `ReactorPlannerFrameMappingTest` | The register-name mapping, that every tooltip label resolves to a real component, the icon cache, and the P3-7 resize clamp. |
 | `corpus/Corpus` | The 304-design corpus definition, plus a self-check that the design list is stable. |
 | `corpus/CorpusRunner` | Runs one design headlessly and captures its 36-field fingerprint and report hash. |
 | `corpus/BaselineStore` | Reads, writes and diffs `testResources/corpus-baseline.txt`. |
@@ -1623,10 +1653,13 @@ fails. Two practical warnings, both learned the hard way:
 
 * **No test drives `ReactorPlannerFrame` itself.** The frame needs a display, so only its pure
   static helpers are covered — which now includes the P2-1 icon cache, since `getCachedIcon` and
-  `setComponentIcon` were made `static` precisely to give it a seam. The generated Swing in
-  `initComponents` (~2 400 lines) remains untested, so P3-7 still needs a manual pass.
-* **No fuzz or property test on `Reactor.setCode`.** The malformed cases are hand-picked. A
-  generator over random byte strings is the natural way to close P1-1 off properly.
+  `setComponentIcon` were made `static` precisely to give it a seam, and the P3-7 resize clamp
+  (`clampedFrameSize`). The generated Swing in `initComponents` (~2 400 lines) remains untested,
+  and the two lines of P3-7 that honour the clamp's `null` sit in that untested half — the frame
+  cannot even be constructed headlessly (`java.awt.HeadlessException` from `java.awt.Window.<init>`).
+* ~~**No fuzz or property test on `Reactor.setCode`.**~~ Closed by `ReactorCodeFuzzTest`, but only
+  for the parser's atomicity: it does not cover reader/writer bound mismatches, where a widened
+  reader bound was caught by a hand-written test rather than by the harness.
 * **No performance regression guard.** P2-1, P2-2 and P2-3 were measured with a throwaway harness,
   not by a benchmark in the suite. The P2-1 *cache* is pinned (a mutation that stops caching fails),
   and P2-3(a) is pinned by an equivalence test, but nothing fails if any of them is merely slow or poorly bounded.

@@ -1951,17 +1951,37 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         }
     }
 
+    /**
+     * P3-7 seam: the size to ask the frame for, or null when it already honours its minimum and
+     * therefore needs no resize request at all. Static because a JFrame cannot be constructed in a
+     * headless JVM at all — {@code java.awt.HeadlessException} out of {@code java.awt.Window.<init>} —
+     * so this clamp and the decision to resize are the only part of {@link plannerResized} a test
+     * can reach.
+     */
+    public static java.awt.Dimension clampedFrameSize(
+            final java.awt.Dimension current,
+            final java.awt.Dimension minimum) {
+        final int width = Math.max(current.width, minimum.width);
+        final int height = Math.max(current.height, minimum.height);
+        if (width == current.width && height == current.height) {
+            return null;
+        }
+        return new java.awt.Dimension(width, height);
+    }
+
     private void plannerResized(java.awt.event.ComponentEvent evt) { // GEN-FIRST:event_plannerResized
-        // Force minimum dimensions to be honored, since Swing apparently doesn't handle that automatically.
-        Dimension dim = this.getSize();
-        Dimension minDim = this.getMinimumSize();
-        if (dim.width < minDim.width) {
-            dim.width = minDim.width;
+        // Force minimum dimensions to be honored, since Swing apparently doesn't handle that
+        // automatically. P3-7: asking for a size from inside this frame's own resize handler asks
+        // Swing for another resize, which re-fires this handler -- the feedback loop behind the
+        // flicker. Only ask when the clamp below actually moves something; a frame that already
+        // honours its minimum gets no resize request at all. The icon pass below stays unguarded:
+        // reactorPanelComponentResized and componentsPanelComponentResized call this method when a
+        // *panel* resized and the frame did not, and that is exactly when the icons have to be
+        // rescaled.
+        java.awt.Dimension resizeRequest = clampedFrameSize(this.getSize(), this.getMinimumSize());
+        if (resizeRequest != null) {
+            setSize(resizeRequest);
         }
-        if (dim.height < minDim.height) {
-            dim.height = minDim.height;
-        }
-        setSize(dim);
         Enumeration<AbstractButton> elements = componentsGroup.getElements();
         while (elements.hasMoreElements()) {
             AbstractButton button = elements.nextElement();

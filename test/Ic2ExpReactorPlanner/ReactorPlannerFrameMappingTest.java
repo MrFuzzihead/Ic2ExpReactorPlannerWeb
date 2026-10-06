@@ -224,6 +224,44 @@ class ReactorPlannerFrameMappingTest {
         assertNull(button.getIcon(), "a button too small to draw on keeps an icon");
     }
 
+    // ================================================================== resize feedback (P3-7)
+
+    /**
+     * P3-7: {@code plannerResized} used to call {@code setSize()} unconditionally, so every resize
+     * event asked Swing for another resize and re-fired the handler -- the flicker. {@link
+     * ReactorPlannerFrame.clampedFrameSize clampedFrameSize} is the seam that decides whether a
+     * resize is asked for at all, and it is the only part of that handler reachable here: a {@code
+     * JFrame} cannot be constructed in a headless JVM at all ({@code java.awt.HeadlessException}
+     * out of {@code java.awt.Window.<init>}), so the frame itself is never instantiated and the
+     * two lines that honour the {@code null} are pinned by reading, not by running.
+     */
+    @Test
+    @DisplayName("a frame that honours its minimum asks for no resize")
+    void aFrameAtOrAboveItsMinimumAsksForNoResize() {
+        java.awt.Dimension minimum = new java.awt.Dimension(915, 700);
+        assertNull(
+                ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(915, 700), minimum),
+                "exactly at the minimum there is nothing to fix");
+        assertNull(
+                ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(1200, 900), minimum),
+                "above the minimum there is nothing to fix either");
+    }
+
+    @Test
+    @DisplayName("a frame below its minimum is clamped on the axis that is short")
+    void aFrameBelowItsMinimumIsClamped() {
+        java.awt.Dimension minimum = new java.awt.Dimension(915, 700);
+        java.awt.Dimension clamped =
+                ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(900, 700), minimum);
+        assertNotNull(clamped, "the width is short, so a resize is requested");
+        assertEquals(915, clamped.width, "the short axis is raised to the minimum");
+        assertEquals(700, clamped.height, "the axis that already fits is left alone");
+
+        java.awt.Dimension collapsed = ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(0, 0), minimum);
+        assertEquals(915, collapsed.width, "a collapsed frame is clamped on both axes");
+        assertEquals(700, collapsed.height, "a collapsed frame is clamped on both axes");
+    }
+
     // ================================================================== resource bundle
 
     @Test
