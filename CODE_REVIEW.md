@@ -17,11 +17,11 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 |                                              | Count |
 |----------------------------------------------|-------|
 | P0 — wrong simulation results                | 2 (both fixed) |
-| P1 — crashes / data races                    | 5 (4 fixed) |
+| P1 — crashes / data races                    | 5 (4 fixed, 1 retracted) |
 | P2 — performance                             | 3 (3 fixed) |
 | P3 — dead code, correctness-adjacent cleanup | 20 (18 fixed, 2 retracted) |
 | Retracted / corrected from the first pass    | 6     |
-| **Covered by an automated regression test**  | **512** |
+| **Covered by an automated regression test**  | **527** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -386,7 +386,7 @@ simulation duration to report, and the fix scoped itself to the two state update
 
 ---
 
-### P1-4 ✅🆕 Heat-output units are inconsistent between the total and the per-tick figures
+### P1-4 ✅ RETRACTED (false positive; the discrepancy is pinned, not changed) 🆕 Heat-output units are inconsistent between the total and the per-tick figures
 
 **File:** `src/Ic2ExpReactorPlanner/AutomationSimulator.java`
 
@@ -412,7 +412,7 @@ discrepancy cannot change unnoticed.
 
 ---
 
-### P1-5 🆕 A payload whose leading byte has the high bit set decodes negative, and the Base64 reader has no range guard
+### P1-5 ✅ FIXED 🆕 A payload whose leading byte has the high bit set decodes negative, and the Base64 reader has no range guard
 
 **Files:** `src/Ic2ExpReactorPlanner/BigintStorage.java:45` (`inputBase64`, `extract`) and
 `src/Ic2ExpReactorPlanner/Reactor.java:635` (`readCodeString`)
@@ -1506,7 +1506,7 @@ RSH it reports 29 000 of "received heat" while only 11 000 was stored. Fixing P0
 fix this; the accumulation needs to move after the acceptance is computed.
 Pinned by `CondensatorTest.coolingNeverExceedsWhatWasStored`.
 
-### P3-19 ✅🆕 `SimulationData`'s output totals are only filled in for non-exploding runs
+### P3-19 ✅ FIXED 🆕 `SimulationData`'s output totals are only filled in for non-exploding runs
 
 **Fixed.** Not a crash, but a trap for anyone reading the data: in `AutomationSimulator` every
 output field (`totalReactorTicks`, `totalEUoutput`, `avg/min/maxEUoutput`, `totalHUoutput` and the
