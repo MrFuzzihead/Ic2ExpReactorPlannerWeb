@@ -1354,8 +1354,9 @@ design as safe".
    ~~the stale `lastEUoutput`~~ (P3-2) is **done** — the pair is dead, not merely idempotent.
    Remaining in this item: `plannerResized` (P3-7).
 10. ~~**P1-5** the negative-payload refusal~~ — **done and verified**; see above. Found by
-    `ReactorCodeFuzzTest`, which is now in the suite: 6 tests over ~2 000 generated inputs, and the
-    invariant is that `setCode` ends in one of two whole states.
+    `ReactorCodeFuzzTest`, which is now in the suite: 6 tests over **1 598 generated inputs** (84
+    prefixes, 84 deletions, 1 176 substitutions, 14 edge cases, 238 legacy mutations, 2 re-applications),
+    and the invariant is that `setCode` ends in one of two whole states.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge. The code-format bound follow-up is
    **done** too — see P3-3.
@@ -1479,6 +1480,21 @@ Two environment notes:
 | `corpus/CorpusRunner` | Runs one design headlessly and captures its 36-field fingerprint and report hash. |
 | `corpus/BaselineStore` | Reads, writes and diffs `testResources/corpus-baseline.txt`. |
 | `corpus/CorpusBaselineTest` | The differential gate, plus determinism, coverage and per-regime self-checks. |
+
+### A generated-input harness for the parser
+
+`ReactorCodeFuzzTest` is the one place in the suite that does not hand-write inputs. It takes one
+populated design — quad rod, plating, fluid, pulsed, heat, a custom tick limit — and feeds `setCode`
+**1 598** generated variants of its code and of its legacy form: every prefix, every single-character
+ deletion, every single-character substitution over a 14-character troublemaker alphabet, and a list
+of edge junk. Generation is deterministic, so a failure is reproducible from the seed alone.
+
+The property is the one the parser's reputation needs: `setCode` is atomic. Each input must end in
+one of exactly two states — the reactor byte-for-byte as it was (with the derived max heat, the heat
+and the tick limit each checked separately, since plating and the tick limit are the fields a
+half-parse used to move on their own), or a design whose own code reads back as itself. It must never
+throw. That is what found P1-5: no hand-written case had tried a payload whose leading byte has the
+high bit set, and the substitutions family does it automatically.
 
 ### Design notes
 
