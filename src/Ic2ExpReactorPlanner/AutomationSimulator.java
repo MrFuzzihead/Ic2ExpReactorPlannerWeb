@@ -433,8 +433,13 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                         }
                         lastHeatOutput = reactor.getVentedHeat();
                         totalHeatOutput += lastHeatOutput;
-                        minEUoutput = Math.min(lastEUoutput, minEUoutput);
-                        maxEUoutput = Math.max(lastEUoutput, maxEUoutput);
+                        // P3-2: there is deliberately no EU min/max in this loop. A cooldown tick
+                        // runs only dissipate()/transfer(); generateEnergy() is the only caller of
+                        // addEUOutput and it lives in the main tick loop, so a cooldown tick produces
+                        // no energy. The old pair folded a stale lastEUoutput, which was idempotent
+                        // (the main loop had already folded that same value) but copy-paste from the
+                        // wrong loop. The heat pair below is genuine: clearVentedHeat() precedes the
+                        // dissipate()/transfer() pass, so getVentedHeat() is a fresh figure per tick.
                         minHeatOutput = Math.min(lastHeatOutput, minHeatOutput);
                         maxHeatOutput = Math.max(lastHeatOutput, maxHeatOutput);
                         cooldownTicks++;

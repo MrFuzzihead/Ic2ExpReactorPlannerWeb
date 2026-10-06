@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (12 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (13 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **502** |
 
@@ -35,7 +35,7 @@ silently-wrong safety verdict.
 
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
-performance sweep, P3-3 the `getOldCode()` default, P3-1 the `needsCooldown` report, P3-5 the
+performance sweep, P3-3 the `getOldCode()` default, P3-2 the stale `lastEUoutput`, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
 `CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
@@ -653,11 +653,41 @@ cooldown line.
 Clean isolation, unlike P3-3: the flag is the only thing that test reads. Corpus baseline
 unmoved — `CorpusRunner` records numeric metrics only, and this change touches no number.
 
-### P3-2 ✅ Stale `lastEUoutput` folded into min/max in the cooldown loop
+### P3-2 ✅ FIXED — stale `lastEUoutput` folded into min/max in the cooldown loop
 
 `AutomationSimulator.java:433-436` — `lastEUoutput` is updated in the *main* loop but not in
 the cooldown loop, yet `minEUoutput`/`maxEUoutput` are updated from it there. Idempotent, so
 harmless today, but it is copy-paste from the wrong loop.
+
+#### ✅ Applied and verified — the pair is **dead**, not merely idempotent
+
+The first pass called it idempotent, which understates it. Every read of
+`minEUoutput`/`maxEUoutput` happens **before** the cooldown loop runs:
+
+| Reads of `minEUoutput` / `maxEUoutput` | Site |
+|---|---|
+| the post-run publish block (`data.minEUoutput`, `Simulation.EUOutputs`, `Simulation.Efficiency`) | `:377`, `:381`, `:390` |
+| `handleBrokenComponents` (`prebreak*`, `predeplete*`) — defined `:620`, its **only** call site is `:306` in the main tick loop | `:665`, `:671`, `:677`, `:711`, `:717`, `:723` |
+| **none** | the cooldown loop (`421-458`) and everything after it |
+
+The data block at `:357`/`:377` runs before the cooldown `do {` at `:421`, so the two lines at
+`:436-437` wrote into fields nothing reads afterwards. They were **deleted**, with a comment
+saying why: a cooldown tick runs only `dissipate()`/`transfer()`, and `generateEnergy()` is the
+only caller of `addEUOutput` (`FuelRod.java:225`), so a cooldown tick produces no energy at all.
+
+1. **Poisoned instead of reverted.** Replacing the pair with `minEUoutput = Math.min(0.0, minEUoutput)`
+   — a deliberately wrong value — moves **0 of 304** corpus designs. That is the empirical proof that
+   the pair is unreachable by consumer, not merely self-cancelling; it also means the "count cooldown
+   ticks as 0 EU" alternative has no user-visible semantics to argue about.
+2. **Corpus: 0 of 304 designs moved**, suite **502 passed / 0 failed / 0 skipped**.
+3. **Mutation table: not caught — expected.** The change is behaviour-preserving, so a green run is
+   not evidence. Same status as P2-3(d) and P1-2.
+
+**The same argument reaches further than this fix went.** The heat pair at `:438-439` and
+`totalHeatOutput += lastHeatOutput` are unread after that point too — their consumers are `:357-366`
+and `handleBrokenComponents`. Left alone on purpose: `lastHeatOutput` *is* live, it is the loop
+condition at `:458`, so the block reads as the loop's own accounting, and deleting three more
+lines for no gain widens the diff past the finding.
 
 ### P3-3 ✅ FIXED — `getOldCode()` compares `resumeTemp` against `DEFAULT_SUSPEND_TEMP`
 
@@ -1178,7 +1208,8 @@ design as safe".
    bounded to the range the code format can carry, the threshold only below, since it serves the
    heat and the damage scale at once. ~~the `TextureFactory` fallback loop~~ (P3-8) is **done** —
    display-only, no calculation touched, pinned by a new `TextureFactoryTest`.
-   Remaining in this item: the stale `lastEUoutput` and `plannerResized`.
+   ~~the stale `lastEUoutput`~~ (P3-2) is **done** — the pair is dead, not merely idempotent.
+   Remaining in this item: `plannerResized` (P3-7).
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge.
 
