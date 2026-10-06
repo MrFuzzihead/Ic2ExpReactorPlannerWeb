@@ -108,14 +108,16 @@ class PassiveComponentsTest {
         }
 
         /**
-         * CODE_REVIEW.md P3-6: {@code currentCellCooling} accumulates negative heat too, unlike
-         * {@link Condensator} which early-returns. Only the peak is ever reported, and the peak is
-         * maintained with {@code Math.max}, so this is invisible in the UI -- but it is a real
-         * asymmetry between the two cell types.
+         * CODE_REVIEW.md P3-6: {@code currentCellCooling} used to accumulate negative heat too,
+         * unlike {@link Condensator} which early-returns. It is now sign-guarded, so draining the
+         * cell (a component heat vent passes {@code -sideVent}) no longer decrements the running
+         * figure. The dip was always invisible in the UI because only {@code bestCellCooling} is
+         * reported and it is a {@code Math.max} -- and the corpus confirms the guard moves 0 of 304
+         * designs, so the peak never depended on a dipped running figure.
          */
         @Test
-        @DisplayName("currentCellCooling is decremented by cooling, though the peak is not")
-        void currentCellCoolingIsNotSignGuarded() {
+        @DisplayName("only absorbed heat counts as cooling credit")
+        void coolingCreditIgnoresDraining() {
             Reactor reactor = new Reactor();
             CoolantCell cell = (CoolantCell) place(reactor, 2, 2, "coolantCell60k");
             cell.preReactorTick();
@@ -124,8 +126,9 @@ class PassiveComponentsTest {
             assertClose(500, cell.getBestCellCooling(), 1e-9, "peak 500");
 
             cell.adjustCurrentHeat(-200);
-            assertClose(300, cell.getCurrentCellCooling(), 1e-9, "current drops with cooling");
-            assertClose(500, cell.getBestCellCooling(), 1e-9, "peak is unaffected, which is what gets reported");
+            assertClose(300, cell.getCurrentHeat(), 1e-9, "the heat really does drop");
+            assertClose(500, cell.getCurrentCellCooling(), 1e-9, "but the credit does not decrement");
+            assertClose(500, cell.getBestCellCooling(), 1e-9, "and the peak is unchanged");
         }
 
         @Test

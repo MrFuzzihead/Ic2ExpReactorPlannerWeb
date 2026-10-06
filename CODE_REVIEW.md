@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (7 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (8 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **496** |
 
@@ -36,8 +36,8 @@ silently-wrong safety verdict.
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-1 the `needsCooldown` report, P3-5 the
-`GGFuelRod` dead members, P3-4 the `doInBackground` catch and P3-15 the overfill refusal — **all fixed and verified**;
-P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
+`GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal and P3-6 the
+`CoolantCell` sign guard — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -763,7 +763,7 @@ constructor runs on every component the app or a test creates — which is exact
 
 Corpus baseline unmoved: the removed writes targeted members no expression ever read.
 
-### P3-6 🔍 `CoolantCell` counts negative heat — cosmetic only
+### P3-6 ✅ FIXED 🔍 `CoolantCell` counts negative heat — cosmetic only
 
 `CoolantCell.java:31` — `currentCellCooling += heat` with no sign guard, unlike
 `Condensator` which early-returns on `heat < 0`. Measured: `+500, -900, -2000, +300` leaves
@@ -774,6 +774,33 @@ Corpus baseline unmoved: the removed writes targeted members no expression ever 
 run), and `bestCellCooling` is what the UI actually reports. Only the per-tick
 `currentCellCooling` goes negative, and nothing reads it. Downgraded to cosmetic; add the
 sign guard for consistency with `Condensator`, or leave it.
+
+#### ✅ Applied and verified
+
+Guarded, rather than left alone — the asymmetry is one line and the guard makes the running
+figure agree with the peak that is actually reported:
+
+```java
+if (heat > 0.0) {
+    currentCellCooling += heat;
+    bestCellCooling = Math.max(currentCellCooling, bestCellCooling);
+}
+return super.adjustCurrentHeat(heat);
+```
+
+The `super` call stays outside the guard: the heat adjustment itself must happen whatever its
+sign, only the *credit* is conditional. (`CoolantCell.java:35` in the current tree, not `:31` —
+the file shifted since the review was written.)
+
+**The "cosmetic" downgrade is now measured, not argued.** The corpus moves **0 of 304 designs**:
+no design's `bestCellCooling` — the figure behind `ComponentInfo.ReceivedHeat` and
+`Simulation.TotalCellCooling` (`AutomationSimulator:496-499`) — depended on a dipped running
+figure. So the review's correction was right, and the guard is a pure consistency fix.
+
+| mutation | result |
+|---|---|
+| drop the guard (as shipped before) | **1 failed** — `PassiveComponentsTest.coolingCreditIgnoresDraining`, the test that pins the new behaviour |
+| drop the `super` call too (`return heat;`) | **35 failed** and **12 of 304** corpus designs move — the delegation is load-bearing, the guard is not |
 
 ### P3-7 ⚠️ `plannerResized` calls `setSize()` from inside its own `componentResized` handler
 
@@ -1001,8 +1028,9 @@ design as safe".
    arithmetic, leaving only the `HU/t` / `EU/t` bundle label to check against upstream.
 7. ~~**P2-3** minor sweep~~ — **done and verified**; see above. (c) and (e) retracted as false positives.
 8. **P3 sweep** — ~~`needsCooldown`~~ (P3-1), ~~the dead `GGFuelRod` members~~ (P3-5),
-   ~~`catch (Throwable)`~~ (P3-4) and ~~the overfill refusal~~ (P3-15) are **done**; P3-16 is
-   **retracted** (the pass-through is the game's rule, and relaxing it makes 4/304 designs look safe).
+   ~~`catch (Throwable)`~~ (P3-4), ~~the overfill refusal~~ (P3-15) and ~~the `CoolantCell` sign
+   guard~~ (P3-6) are **done**; P3-16 is **retracted** (the pass-through is the game's rule, and relaxing
+   it makes 4/304 designs look safe).
    Remaining in this item: the stale `lastEUoutput`, `plannerResized`, and the
    `parent` null guard in `Vent.getVentCoolingCapacity()`.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
