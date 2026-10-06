@@ -19,9 +19,9 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 5 (4 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (17 fixed, 1 retracted) |
-| Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **511** |
+| P3 — dead code, correctness-adjacent cleanup | 19 (17 fixed, 2 retracted) |
+| Retracted / corrected from the first pass    | 6     |
+| **Covered by an automated regression test**  | **512** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -37,8 +37,8 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-2 the stale `lastEUoutput`, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals, P3-7 the resize guard and P3-11 the cross-thread config fields — **all fixed and verified**;
-P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals, P3-7 the resize guard, P3-11 the cross-thread config fields and P3-17 the `GGFuelRod` bonus comment — **all fixed and verified**;
+P3-16 and P3-17 are **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -1332,7 +1332,7 @@ test already pinned the behaviour; it now also pins *why* it must not be "fixed"
 |---|---|
 | relax the guard to `maxHeat > 1` (the review's fix) | **3 failed** — `ReactorItemTest.brokenComponentPassesAdjustmentsThrough`, `VentTest.a broken neighbour refuses the vent even though isCoolable() is still true`, **and** `CorpusBaselineTest` (4 of 304) |
 
-### P3-17 ✅🆕 `GGFuelRod.getHeatBonus()` shadows the global GT5.09/GTNH bonus entirely
+### P3-17 ✅ RETRACTED (documented as intended) 🆕 `GGFuelRod.getHeatBonus()` shadows the global GT5.09/GTNH bonus entirely
 
 `GGFuelRod` overrides `getHeatBonus()` to return a per-rod field, so it never consults the 1.5
 that `FuelRod` returns in GT5.09 and GTNH mode. Consequence: flipping the GT version changes a
@@ -1340,7 +1340,45 @@ vanilla mox rod's output but **not** a compressed- or liquid-plutonium rod's, ev
 rods carry their own bonus (6 and 2 respectively). The per-rod value is only consulted for mox
 rods; the six non-mox variants all carry 0. If the per-rod bonus is meant to be an *additional*
 modifier, the override needs to compose with the global one instead of replacing it.
-Pinned by `PassiveComponentsTest.GGFuelRods`.
+
+**Retracted: the override is the rod's own bonus, and it is meant to replace the mode-derived one.**
+Three pieces of evidence, all read from the tree:
+
+* GG is GoodGenerator, a GTNH sub-mod — the test class already calls it that, and the textures are
+  `gg.CompressedPlutonium.png` and friends — and **all twelve** `ComponentFactory` entries carry
+  `sourceMod = "GTNH"`, while the vanilla rods carry `null`. A GoodGenerator rod is therefore GTNH-native
+  whatever the version toggle says; the toggle exists to re-tune the *vanilla* rods to GT rules.
+* Both kinds of value are the same kind of number: `getEnergy` (`:197`) and `getGTNHEnergy` (`:207`)
+  each apply `(1 + getHeatBonus() * ratio)`, so 6 and 2 sit in the same slot as 1.5 and 4.0. They are
+  not multipliers *on top of* the mode bonus, and composing would ask one rod for two bonuses at once.
+* `getHeatBonus()` only exists because the GTNH-support revision extracted it out of `generateEnergy`
+  — upstream's pre-GTNH `FuelRod` has the 1.5 / 4.0 literals inline in the three mode branches. The
+  accessor was extracted precisely so a rod that knows its own value can say so; a subclass wanting
+  to compose would have called `super.getHeatBonus()`.
+
+So the finding is closed the way P3-16 was: the guard site carries a comment, and the test that
+pinned the behaviour now pins *why* it must not be "fixed". `GGFuelRod.getHeatBonus()` gained the
+comment, `PassiveComponentsTest.GGFuelRods.moxRodsUseTheirOwnBonus` keeps its assertion and gains
+the reasoning, and a new test pins the consequence the review describes with the arithmetic written
+out: at full hull heat, one rod alone in an empty reactor, a high-density plutonium rod makes
+**7000 EU/t** with the toggle off *and* on (`100 × 10 × (1 + rodCount/2) = 1000`, then `× (1 + 6 × 1)`),
+while a vanilla mox rod moves from **500** (`100 × (1 + 4 × 1)`) to **2500** (`1000 × (1 + 1.5 × 1)`).
+
+| mutation | result |
+|---|---|
+| compose: `return this.heatBonus + super.getHeatBonus()` | **11 failed** — the 8 `perRodHeatBonus` instances (0 → 1.5, 6 → 7.5, 2 → 3.5), `moxRodsUseTheirOwnBonus`, `versionToggleMovesVanillaRodsOnly` (7000 → 8500), **and** `CorpusBaselineTest` (74 of 304, every changed design tagged `[rod]`) |
+| delete the override (GG rods fall back to the mode-derived 1.5) | **11 failed** — the same ten tests, the same 74 of 304 |
+
+Both "fixes" are loud, not quiet: the review's alternative moves **74 of 304** corpus designs, and
+there is no version of the composition that is corpus-neutral. The current behaviour is what the
+committed baseline records, which is the strongest argument against changing it.
+
+🔍 **Adjacent, recorded not fixed:** the mode check is asymmetric between heat and energy. `generateHeat`
+picks `handleGTHeat` from the global flags alone (`FuelRod.java:182`), while `generateEnergy` picks
+the GTNH formula from `flags || "GTNH".equals(sourceMod)` (`:222`). A GTNH-native rod with the toggle
+off therefore gets GTNH-scale energy and *vanilla* heat distribution — which is what the GG rod
+corpus designs run in the default configuration. Whether the mod's heat distribution should follow
+`sourceMod` too is a rules question rather than a reading of this code, so it stays open.
 
 ### P3-18 ✅ FIXED (with P0-2) 🆕 `currentCondensatorCooling` counted heat *offered*, not accepted
 
@@ -1447,6 +1485,8 @@ design as safe".
    it when a panel resized and the frame did not.
    ~~the config fields read across threads~~ (P3-11) is **done** — three fields volatile, the rest of
    the finding measured EDT-only, and recorded as not test-observable like P1-2.
+   ~~the `GGFuelRod` bonus~~ (P3-17) is **retracted** — the per-rod value is the rod's own bonus in
+   the same slot as the mode-derived one, so it replaces it; composing would move 74 of 304 designs.
 10. ~~**P1-5** the negative-payload refusal~~ — **done and verified**; see above. Found by
     `ReactorCodeFuzzTest`, which is now in the suite: 6 tests over **1 598 generated inputs** (84
     prefixes, 84 deletions, 1 176 substitutions, 14 edge cases, 238 legacy mutations, 2 re-applications),
@@ -1460,7 +1500,7 @@ design as safe".
 
 ## Testing
 
-A 511-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 512-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -1667,6 +1707,7 @@ the P1-1 parsing cases, and the P1-3 cancel-path cases. A full run takes about 2
 | P2-1: pixel size dropped from `getScaledInstance` | 4 failed |
 | P2-1: bound removed, cache never cleared | 1 failed (`cacheIsBounded`) |
 | P2-1: memo dropped, `setIcon` unconditional | **not caught** — the memo is behaviourally invisible; only the cache above it is pinned |
+| P3-17: GG mox bonus composed with the mode bonus, or the override deleted | 11 failed each (74 of 304 corpus) |
 
 ### Running the mutation checks
 

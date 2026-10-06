@@ -422,15 +422,57 @@ class PassiveComponentsTest {
         @Test
         @DisplayName("mox GG rods scale with their own bonus, not with the global 1.5")
         void moxRodsUseTheirOwnBonus() {
-            // The override replaces FuelRod.getHeatBonus() wholesale, so the GT5.09/GTNH 1.5
-            // never reaches a GG rod. Worth pinning: flipping the GT version does not change a
-            // compressed-plutonium rod's output the way it changes a vanilla mox rod's.
+            // The override replaces FuelRod.getHeatBonus() wholesale. Pinned as intended behaviour
+            // (P3-17 retracted): a GoodGenerator rod is GTNH-native whatever the version toggle
+            // says, and its bonus is its own number in the same units as the mode-derived one.
             FuelRod.setGTNHBehavior(true);
             FuelRod ggMox = (FuelRod) ComponentFactory.createComponent("fuelRodCompressedPlutonium");
             assertClose(6, ggMox.getHeatBonus(), 1e-9, "GG mox keeps its own bonus even in GTNH mode");
 
             FuelRod plainMox = (FuelRod) ComponentFactory.createComponent("fuelRodMox");
             assertClose(1.5, plainMox.getHeatBonus(), 1e-9, "a vanilla mox rod does get 1.5");
+            FuelRod.setGTNHBehavior(false);
+        }
+
+        /**
+         * The consequence the P3-17 review describes, pinned as intended behaviour: flipping the
+         * version toggle moves a vanilla mox rod's output but leaves a GoodGenerator rod's alone.
+         * Measured at full hull heat, one rod alone in an otherwise empty reactor, so the numbers
+         * below are the whole formula. A high-density plutonium rod is GTNH-sourced, so it takes the
+         * GTNH energy formula either way: 100 EU x10 x(1 + rodCount/2, which is 0 for a single rod)
+         * = 1000 EU, and its own bonus of 6 multiplies that by (1 + 6 x 1) = 7000 EU/t. A vanilla
+         * mox rod has a null sourceMod, so the toggle picks both the formula and the bonus: 100 EU
+         * x(1 + 4 x 1) = 500 EU/t with the toggle off, 1000 EU x(1 + 1.5 x 1) = 2500 EU/t with it on.
+         */
+        @Test
+        @DisplayName("the version toggle moves a vanilla mox rod but not a GG one")
+        void versionToggleMovesVanillaRodsOnly() {
+            Reactor ggVanillaMode = new Reactor();
+            place(ggVanillaMode, 2, 2, "fuelRodCompressedPlutonium");
+            ggVanillaMode.setCurrentHeat(ggVanillaMode.getMaxHeat());
+            ((FuelRod) ggVanillaMode.getComponentAt(2, 2)).generateEnergy();
+            assertClose(7000, ggVanillaMode.getCurrentEUoutput(), 1e-9, "GG mox, toggle off");
+
+            FuelRod.setGTNHBehavior(true);
+            Reactor ggGTNHMode = new Reactor();
+            place(ggGTNHMode, 2, 2, "fuelRodCompressedPlutonium");
+            ggGTNHMode.setCurrentHeat(ggGTNHMode.getMaxHeat());
+            ((FuelRod) ggGTNHMode.getComponentAt(2, 2)).generateEnergy();
+            assertClose(7000, ggGTNHMode.getCurrentEUoutput(), 1e-9, "GG mox, toggle on: unchanged");
+            FuelRod.setGTNHBehavior(false);
+
+            Reactor vanillaVanillaMode = new Reactor();
+            place(vanillaVanillaMode, 2, 2, "fuelRodMox");
+            vanillaVanillaMode.setCurrentHeat(vanillaVanillaMode.getMaxHeat());
+            ((FuelRod) vanillaVanillaMode.getComponentAt(2, 2)).generateEnergy();
+            assertClose(500, vanillaVanillaMode.getCurrentEUoutput(), 1e-9, "vanilla mox, toggle off");
+
+            FuelRod.setGTNHBehavior(true);
+            Reactor vanillaGTNHMode = new Reactor();
+            place(vanillaGTNHMode, 2, 2, "fuelRodMox");
+            vanillaGTNHMode.setCurrentHeat(vanillaGTNHMode.getMaxHeat());
+            ((FuelRod) vanillaGTNHMode.getComponentAt(2, 2)).generateEnergy();
+            assertClose(2500, vanillaGTNHMode.getCurrentEUoutput(), 1e-9, "vanilla mox, toggle on");
             FuelRod.setGTNHBehavior(false);
         }
 
