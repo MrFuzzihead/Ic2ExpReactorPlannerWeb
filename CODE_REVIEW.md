@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 5 (4 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (14 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (15 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **509** |
 
@@ -37,7 +37,7 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-2 the stale `lastEUoutput`, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal — **all fixed and verified**;
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals — **all fixed and verified**;
 P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
@@ -1289,14 +1289,40 @@ Pinned by `CondensatorTest.coolingNeverExceedsWhatWasStored`.
 
 ### P3-19 ✅🆕 `SimulationData`'s output totals are only filled in for non-exploding runs
 
-Not a crash, but a trap for anyone reading the data: in `AutomationSimulator` every output
-field (`totalReactorTicks`, `totalEUoutput`, `avg/min/maxEUoutput`, `totalHUoutput` and the
-matching HU fields) is written only inside the "did not explode" branch. For a design that
-explodes they all stay at their zero defaults, while `timeToBurn` / `timeToXplode`, `maxTemp`
-and the broken/depleted details *are* populated. The GUI's comparison view therefore shows
-zeros for exploding designs rather than "not applicable". Pinned by
-`AutomationSimulatorTest.Output.explodingRunsLeaveOutputTotalsAtZero`; decide whether to
-populate them for exploding runs too.
+**Fixed.** Not a crash, but a trap for anyone reading the data: in `AutomationSimulator` every
+output field (`totalReactorTicks`, `totalEUoutput`, `avg/min/maxEUoutput`, `totalHUoutput` and the
+matching HU fields) was written only inside the "did not explode" branch, so an exploding design
+reported *nothing produced* while `timeToBurn` / `timeToXplode`, `maxTemp` and the broken/depleted
+details were populated. The GUI's comparison view (`ReactorPlannerFrame.java:3036-3087` reads
+`totalReactorTicks`, `totalEUoutput` and `avgEUoutput`) therefore ranked a melted reactor as a
+silent one. **236 of the 304 corpus designs explode**, so this is the dominant path, not a corner.
+
+The ticks before the explosion did produce output, and the class already summarises partial output
+for a broken or depleted component (`Simulation.EUOutputsBeforeBreak`,
+`Simulation.EUOutputsBeforeDepleted`), so an exploding run gets the same treatment: the block
+moved into `reportOutputTotals(…)`, called from both branches, and the exploding call picks two
+new bundle keys — `Simulation.EUOutputsBeforeOverheated` / `Simulation.HeatOutputsBeforeOverheated`,
+"Total output before the reactor overheated: …", worded off the existing pair. Reusing
+`Simulation.EUOutputs` was rejected: its text says "after full simulation", which is untrue for a
+run that stopped at the explosion.
+
+Corpus: **213 of 304 moved**, and the changed set is exactly the designs that explode after at
+least one tick below max heat — the 68 that never explode and the 23 that overheat on tick 1
+stayed byte-identical, which is also the containment check that the extraction did not disturb the
+non-exploding path. Field by field: `totalReactorTicks` (213), the four EU totals (186 non-fluid
+ designs), the four HU totals (27 fluid designs, of which only 10 had nonzero heat output — the
+ rest went 0 → 0), and the report hash (196; the other 17 designs print no output line at all).
+
+`AutomationSimulatorTest.Output.explodingRunsLeaveOutputTotalsAtZero` is deliberately flipped to
+`explodingRunsReportOutputUpToTheExplosion`: bareRod now reports 2 500 ticks, 250 000 EU and 5 EU/t
+average / min / max. The exploding tick is included in the *total* (energy is generated at
+`AutomationSimulator.java:241` before the tick's heat is checked at `:249`) but excluded from the
+min/max pair, which is what the `heat <= maxHeat` guard at `:249` already means. A reactor
+pre-heated **above** max heat has no qualifying tick, so it keeps the zero defaults — writing the
+pair there would publish `Double.MAX_VALUE` as a minimum, and the second half of the test pins
+that rather than leaving it latent. The alternative (leave the fields zero and teach the GUI to
+render "not applicable") was rejected: the comparison view has no such rendering, and the numbers
+are real measurements of what the design did before it melted.
 
 ---
 
@@ -1360,6 +1386,9 @@ design as safe".
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge. The code-format bound follow-up is
    **done** too — see P3-3.
+11. ~~**P3-19** the exploding-run output totals~~ — **done and verified**; see above. The corpus
+    moved 213 of 304 designs, which is the point of the change: 236 designs explode, 23 of them on
+    the first tick. The baseline was regenerated deliberately after reading that diff.
 
 ## Testing
 

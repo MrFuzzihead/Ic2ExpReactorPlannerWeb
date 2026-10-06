@@ -27,10 +27,13 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p><b>One behaviour to know before reading these tests.</b> {@link SimulationData}'s output
  * totals ({@code totalReactorTicks}, {@code totalEUoutput}, {@code avg/min/maxEUoutput},
- * {@code totalHUoutput} and friends) are only written in {@code AutomationSimulator}'s
- * "did not explode" branch. For a design that explodes they are all left at zero, while the
- * per-threshold times ({@code timeToBurn}, {@code timeToXplode}), {@code maxTemp} and the
- * broken/depleted details <i>are</i> populated. {@link #explodingRunsLeaveOutputTotalsAtZero}
+ * {@code totalHUoutput} and friends) describe the ticks that ended below max heat. For a design
+ * that explodes they are written too, as the output produced <i>before</i> the explosion, and the
+ * report says so ("Total output before the reactor overheated"); the exploding tick is excluded
+ * from the min/max pair, and a reactor that starts above max heat has no qualifying tick at all,
+ * so it keeps the zero defaults rather than reporting {@code Double.MAX_VALUE} as a minimum.
+ * The per-threshold times ({@code timeToBurn}, {@code timeToXplode}), {@code maxTemp} and the
+ * broken/depleted details are always populated. {@link #explodingRunsReportOutputUpToTheExplosion}
  * pins that, and the rest of the suite picks the right metric for the question being asked.
  *
  * <p>Assertions are split into:
@@ -247,21 +250,34 @@ class AutomationSimulatorTest {
     class Output {
 
         /**
-         * The behaviour the rest of this class depends on: exploding runs leave the output
-         * totals at their zero defaults, while the threshold times and peak temperature are
-         * still recorded.
+         * P3-19: an exploding run reports the output it produced before the explosion, under a
+         * "before the reactor overheated" heading. bareRod runs 2 500 ticks at 100 EU/tick, so
+         * the total includes the exploding tick (energy is generated before the tick's heat is
+         * checked) while the min/max pair only covers ticks that ended below max heat. A reactor
+         * that starts above max heat has no such tick, so it keeps the zero defaults: writing
+         * the min/max pair there would publish Double.MAX_VALUE as a minimum.
          */
         @Test
-        @DisplayName("exploding runs leave output totals at zero but still record thresholds")
-        void explodingRunsLeaveOutputTotalsAtZero() throws Exception {
-            SimulationData data = TestSupport.simulate(bareRod()).data;
-            assertEquals(0, data.totalReactorTicks, "not set for an exploding run");
-            assertEquals(0.0, data.totalEUoutput, 1e-9, "not set");
-            assertEquals(0.0, data.avgEUoutput, 1e-9, "not set");
-            assertEquals(0.0, data.maxEUoutput, 1e-9, "not set");
-            // ... but these are
-            assertEquals(2500, data.timeToXplode, "recorded");
+        @DisplayName("exploding runs report output up to the explosion, thresholds included")
+        void explodingRunsReportOutputUpToTheExplosion() throws Exception {
+            TestSupport.SimResult run = TestSupport.simulate(bareRod());
+            SimulationData data = run.data;
+            assertEquals(2500, data.totalReactorTicks, "the run length is recorded");
+            assertEquals(2500, data.timeToXplode, "and so is the explosion");
+            assertClose(250000, data.totalEUoutput, 1e-6, "2 500 ticks x 100 EU, the exploding tick included");
+            assertClose(5.0, data.avgEUoutput, 1e-9, "250 000 EU / (2 500 ticks x 20)");
+            assertClose(5.0, data.minEUoutput, 1e-9, "100 EU/tick = 5 EU/t");
+            assertClose(5.0, data.maxEUoutput, 1e-9, "every tick was the same");
             assertClose(10000, data.maxTemp, 1e-6, "recorded");
+            assertTrue(
+                    run.outputText.contains("Total output before the reactor overheated"),
+                    "the report says the totals stop at the explosion");
+
+            Reactor overheated = bareRod();
+            overheated.setCurrentHeat(10001);
+            SimulationData none = TestSupport.simulate(overheated).data;
+            assertEquals(0, none.totalReactorTicks, "no tick ended below max heat, so nothing is summarised");
+            assertClose(0.0, none.totalEUoutput, 1e-9, "and the minimum would otherwise be Double.MAX_VALUE");
         }
 
         @Test

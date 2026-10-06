@@ -349,50 +349,9 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                     publish(formatI18n("Simulation.ComponentsReplaced", replacedItemsString));
                 }
 
-                if (reactorTicks > 0) {
-                    data.totalReactorTicks = reactorTicks;
-                    if (reactor.isFluid()) {
-                        data.totalHUoutput = 40 * totalHeatOutput;
-                        data.avgHUoutput = 2 * totalHeatOutput / reactorTicks;
-                        data.minHUoutput = 2 * minHeatOutput;
-                        data.maxHUoutput = 2 * maxHeatOutput;
-                        if (totalHeatOutput > 0) {
-                            publish(formatI18n(
-                                    "Simulation.HeatOutputs",
-                                    DECIMAL_FORMAT.format(40 * totalHeatOutput),
-                                    DECIMAL_FORMAT.format(2 * totalHeatOutput / reactorTicks),
-                                    DECIMAL_FORMAT.format(2 * minHeatOutput),
-                                    DECIMAL_FORMAT.format(2 * maxHeatOutput)));
-                            if (totalRodCount > 0) {
-                                publish(formatI18n(
-                                        "Simulation.Efficiency",
-                                        totalHeatOutput / reactorTicks / 4 / totalRodCount,
-                                        minHeatOutput / 4 / totalRodCount,
-                                        maxHeatOutput / 4 / totalRodCount));
-                            }
-                        }
-                    } else {
-                        data.totalEUoutput = totalEUoutput;
-                        data.avgEUoutput = totalEUoutput / (reactorTicks * 20);
-                        data.minEUoutput = minEUoutput / 20.0;
-                        data.maxEUoutput = maxEUoutput / 20.0;
-                        if (totalEUoutput > 0) {
-                            publish(formatI18n(
-                                    "Simulation.EUOutputs",
-                                    DECIMAL_FORMAT.format(totalEUoutput),
-                                    DECIMAL_FORMAT.format(totalEUoutput / (reactorTicks * 20)),
-                                    DECIMAL_FORMAT.format(minEUoutput / 20.0),
-                                    DECIMAL_FORMAT.format(maxEUoutput / 20.0)));
-                            if (totalRodCount > 0) {
-                                publish(formatI18n(
-                                        "Simulation.Efficiency",
-                                        totalEUoutput / reactorTicks / 100 / totalRodCount,
-                                        minEUoutput / 100 / totalRodCount,
-                                        maxEUoutput / 100 / totalRodCount));
-                            }
-                        }
-                    }
-                }
+                reportOutputTotals(
+                        reactorTicks, totalRodCount, totalHeatOutput, minHeatOutput,
+                        maxHeatOutput, totalEUoutput, minEUoutput, maxEUoutput, false);
 
                 if (reactor.getCurrentHeat() > 0.0) {
                     publish(formatI18n("Simulation.ReactorRemainingHeat", reactor.getCurrentHeat()));
@@ -481,6 +440,9 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                 }
                 explosionPower *= explosionPowerMult;
                 publish(formatI18n("Simulation.ExplosionPower", explosionPower));
+                reportOutputTotals(
+                        reactorTicks, totalRodCount, totalHeatOutput, minHeatOutput,
+                        maxHeatOutput, totalEUoutput, minEUoutput, maxEUoutput, true);
             }
             double totalEffectiveVentCooling = 0.0;
             double totalVentCoolingCapacity = 0.0;
@@ -584,6 +546,76 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
         completed = true;
         firePropertyChange("completed", null, true);
         return null;
+    }
+
+    /**
+     * P3-19: the output totals used to be written only on the "did not explode" path, so an
+     * exploding design reported zero EU, zero ticks and zero efficiency while its time-to-explode,
+     * max temperature and explosion power were all populated — the comparison view read that as
+     * "produces nothing" rather than "produced this much, then melted". The ticks before the
+     * explosion did produce output, and the class already summarises partial output for a broken
+     * or depleted component, so an exploding run gets the same treatment, under a "before the
+     * reactor overheated" heading.
+     *
+     * minEUoutput and minHeatOutput stay at their Double.MAX_VALUE defaults until the first tick
+     * below max heat, so a reactor that overheats on the very first tick has no normal tick to
+     * summarise: it keeps the zero defaults rather than reporting Double.MAX_VALUE as a minimum.
+     */
+    private void reportOutputTotals(
+            final int reactorTicks,
+            final int totalRodCount,
+            final double totalHeatOutput,
+            final double minHeatOutput,
+            final double maxHeatOutput,
+            final double totalEUoutput,
+            final double minEUoutput,
+            final double maxEUoutput,
+            final boolean overheated) {
+        if (reactorTicks <= 0 || minEUoutput >= Double.MAX_VALUE) {
+            return;
+        }
+        data.totalReactorTicks = reactorTicks;
+        if (reactor.isFluid()) {
+            data.totalHUoutput = 40 * totalHeatOutput;
+            data.avgHUoutput = 2 * totalHeatOutput / reactorTicks;
+            data.minHUoutput = 2 * minHeatOutput;
+            data.maxHUoutput = 2 * maxHeatOutput;
+            if (totalHeatOutput > 0) {
+                publish(formatI18n(
+                        overheated ? "Simulation.HeatOutputsBeforeOverheated" : "Simulation.HeatOutputs",
+                        DECIMAL_FORMAT.format(40 * totalHeatOutput),
+                        DECIMAL_FORMAT.format(2 * totalHeatOutput / reactorTicks),
+                        DECIMAL_FORMAT.format(2 * minHeatOutput),
+                        DECIMAL_FORMAT.format(2 * maxHeatOutput)));
+                if (totalRodCount > 0) {
+                    publish(formatI18n(
+                            "Simulation.Efficiency",
+                            totalHeatOutput / reactorTicks / 4 / totalRodCount,
+                            minHeatOutput / 4 / totalRodCount,
+                            maxHeatOutput / 4 / totalRodCount));
+                }
+            }
+        } else {
+            data.totalEUoutput = totalEUoutput;
+            data.avgEUoutput = totalEUoutput / (reactorTicks * 20);
+            data.minEUoutput = minEUoutput / 20.0;
+            data.maxEUoutput = maxEUoutput / 20.0;
+            if (totalEUoutput > 0) {
+                publish(formatI18n(
+                        overheated ? "Simulation.EUOutputsBeforeOverheated" : "Simulation.EUOutputs",
+                        DECIMAL_FORMAT.format(totalEUoutput),
+                        DECIMAL_FORMAT.format(totalEUoutput / (reactorTicks * 20)),
+                        DECIMAL_FORMAT.format(minEUoutput / 20.0),
+                        DECIMAL_FORMAT.format(maxEUoutput / 20.0)));
+                if (totalRodCount > 0) {
+                    publish(formatI18n(
+                            "Simulation.Efficiency",
+                            totalEUoutput / reactorTicks / 100 / totalRodCount,
+                            minEUoutput / 100 / totalRodCount,
+                            maxEUoutput / 100 / totalRodCount));
+                }
+            }
+        }
     }
 
     /**
