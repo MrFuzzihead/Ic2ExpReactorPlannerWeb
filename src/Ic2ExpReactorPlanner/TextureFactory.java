@@ -57,12 +57,18 @@ public class TextureFactory {
             }
         }
 
-        for (String asset_path : ASSET_PATHS) {
-            if (result == null && TextureFactory.class.getResource("/" + asset_path + imageNames[0]) != null) {
-                try (InputStream stream = TextureFactory.class.getResourceAsStream("/" + asset_path + imageNames[0])) {
-                    result = ImageIO.read(stream);
-                } catch (IOException ex) {
-                    ExceptionDialogDisplay.showExceptionDialog(ex);
+        // The zip branch above tries every fallback name, so this branch has to as well: a texture
+        // whose primary name is absent from the jar but whose fallback name is present used to
+        // resolve to no image at all, which renders the component blank (CODE_REVIEW.md P3-8). The
+        // loop nesting mirrors the zip branch, so a primary name that is present still wins.
+        for (String imageName : imageNames) {
+            for (String asset_path : ASSET_PATHS) {
+                if (result == null && TextureFactory.class.getResource("/" + asset_path + imageName) != null) {
+                    try (InputStream stream = TextureFactory.class.getResourceAsStream("/" + asset_path + imageName)) {
+                        result = ImageIO.read(stream);
+                    } catch (IOException ex) {
+                        ExceptionDialogDisplay.showExceptionDialog(ex);
+                    }
                 }
             }
         }

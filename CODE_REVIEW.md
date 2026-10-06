@@ -19,9 +19,9 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (11 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (12 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **499** |
+| **Covered by an automated regression test**  | **502** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -37,7 +37,7 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -807,12 +807,47 @@ figure. So the review's correction was right, and the guard is a pure consistenc
 `ReactorPlannerFrame.java:1889-1899` — resize-feedback / flicker risk, and it runs the
 127-icon rebuild from P2-1 on every event. Guard on an actual size change.
 
-### P3-8 ⚠️ `TextureFactory` classpath fallback only tries `imageNames[0]`
+### P3-8 ✅ FIXED 🔍 `TextureFactory` classpath fallback only tries `imageNames[0]`
 
 `TextureFactory.java:61-69` — the zip branch iterates *all* fallback names, the classpath
 branch only `imageNames[0]`. Asymmetric: a texture whose first name is absent from the jar
 but whose second name is present will silently render blank. Make both branches iterate the
 full list.
+
+#### ✅ Applied and verified — no calculation touched
+
+Made the classpath branch iterate every name, with the same loop nesting as the zip branch:
+
+```java
+for (String imageName : imageNames) {
+    for (String asset_path : ASSET_PATHS) {
+        if (result == null && TextureFactory.class.getResource("/" + asset_path + imageName) != null) {
+            try (InputStream stream = TextureFactory.class.getResourceAsStream("/" + asset_path + imageName)) {
+                result = ImageIO.read(stream);
+            } catch (IOException ex) { /* unchanged */ }
+        }
+    }
+}
+```
+
+**Nothing in the simulation reads an image**, so this is a display-only change. `image` is read
+only by `ReactorPlannerFrame` (`:295`, `:1971`, `:1983`, `:2610`, every one guarded by `!= null`) and
+shared by the copy constructor (`ReactorItem.java:237`); the corpus fingerprint is metrics only
+(`completed`, `totalReactorTicks`, `timeToBurn`, …). The corpus is therefore unmoved *by construction*,
+not by luck.
+
+Latent for the components this repo actually builds: all **69 asset names are primary names**, so
+`imageNames[0]` always resolves and the second name is never reached. The asymmetry bites a real
+jar that carries the base IC2 item textures (`uranium.png`, `heat_storage.png`) rather than the
+reactor-plating names — which is why the new tests drive it with a name pair.
+
+| mutation | result |
+|---|---|
+| revert to the shipped `imageNames[0]` loop | **1 failed** — `missingPrimaryFallsBackToTheNextName` |
+| iterate all names but nest path-outer (the other reading of "make both branches iterate") | **0 failed** — not observable here: all 69 assets are 16×16 and `java.awt.Image` exposes no pixel data, so no test can tell which of two present names won. The zip branch's name-outer nesting is the tie-break and is mirrored deliberately |
+| corpus after the fix | **0 of 304 designs move** — images are not in the fingerprint |
+
+Suite is now **502 passed / 0 failed** (three tests added in a new `TextureFactoryTest`).
 
 ### P3-9 ✅ FIXED 🔍 `MaterialsList.getMaterialsForComponent` can return `null` → `NullPointerException`
 
@@ -1141,7 +1176,8 @@ design as safe".
    (P3-9) are **done**; P3-16 is **retracted** (the pass-through is the game's rule, and relaxing
    it makes 4/304 designs look safe). ~~the setter bounds~~ (P3-12) are **done** — the pause is
    bounded to the range the code format can carry, the threshold only below, since it serves the
-   heat and the damage scale at once.
+   heat and the damage scale at once. ~~the `TextureFactory` fallback loop~~ (P3-8) is **done** —
+   display-only, no calculation touched, pinned by a new `TextureFactoryTest`.
    Remaining in this item: the stale `lastEUoutput` and `plannerResized`.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge.
@@ -1378,8 +1414,10 @@ fails. Two practical warnings, both learned the hard way:
   `java.util.concurrent.ExecutionException` at `get()`, which `ReactorPlannerFrame` never calls,
   so the GUI now shows a report that simply stops. A guard would need the frame to call `get()`
   (or install a listener) and render that exception.
-* **`TextureFactory` is only covered** by the fact that every component has a non-null image.
-  The texture-pack fallback-name asymmetry in P3-8 needs a real pack to exercise.
+* **`TextureFactory`'s zip branch is still uncovered.** `TextureFactoryTest` now drives the
+  classpath branch, including the P3-8 fallback, but `TEXTURE_PACK` is null in a headless run
+  unless an `erpprefs.xml` in the working directory names a real zip, so the zip branch and its
+  `ASSET_PATHS` walk remain untested.
 * **The GUI spinner bound is smaller than the code format's.** `thresholdSpinner` is a
   `SpinnerNumberModel(9000, 0, Reactor.MAX_COMPONENT_HEAT, 1)` (1.08e6), but a rev-4 code carries
   a threshold up to 1e9 and round-trips it exactly, so `thresholdSpinner.setValue(component.getAutomationThreshold())`
