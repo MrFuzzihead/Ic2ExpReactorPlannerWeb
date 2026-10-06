@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (8 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (9 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **496** |
 
@@ -36,8 +36,8 @@ silently-wrong safety verdict.
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-1 the `needsCooldown` report, P3-5 the
-`GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal and P3-6 the
-`CoolantCell` sign guard — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
+`GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
+`CoolantCell` sign guard and P3-13 the `Vent` null `parent` guard — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -850,7 +850,7 @@ rebuild is a genuinely visible risk.
 out-of-range threshold is honored, and `handleAutomation()` compares against it directly.
 Consider clamping on read.
 
-### P3-13 ✅🆕 `Vent.getVentCoolingCapacity()` dereferences `parent` without a null check
+### P3-13 ✅ FIXED 🆕 `Vent.getVentCoolingCapacity()` dereferences `parent` without a null check
 
 **File:** `src/Ic2ExpReactorPlanner/components/Vent.java:92`
 
@@ -867,6 +867,29 @@ The GUI only ever asks placed components, so this is latent rather than live —
 the trap a refactor falls into if it starts querying `ComponentFactory` prototypes for tooltips
 or for the palette. Vents with `sideVent == 0` return before touching `parent` and are safe.
 Pinned by `VentTest.unplacedSideVentThrowsOnVentCoolingCapacity`.
+
+#### ✅ Applied and verified
+
+Guarded, and the value is the one the method already computes: an unplaced vent has no
+neighbours to cool, so its side-vent contribution is 0 and the capacity is just `selfVent`.
+
+```java
+if (sideVent > 0 && parent != null) {
+```
+
+**This commit deliberately flips a test expectation.** `unplacedSideVentThrowsOnVentCoolingCapacity`
+pinned the *throwing* behaviour, which was only a pin on the bug. It is replaced by
+`unplacedSideVentIsQueryable` — DisplayName "an unplaced side-venting vent is queryable but not
+runnable" — which pins the new answer (`getVentCoolingCapacity()` → 0, `producesOutput()` → false,
+matching a *placed* vent with nothing coolable beside it) and keeps one `assertThrows` on the
+boundary that must **not** be widened: `dissipate()` still needs a reactor, because it is an
+action on the reactor rather than a query about it.
+
+| mutation | result |
+|---|---|
+| revert to `if (sideVent > 0)` | **1 failed** — `unplacedSideVentIsQueryable` |
+| also guard `dissipate()` (`if (parent == null) return 0.0;`) | **1 failed** — the same test, via its `assertThrows` line |
+| corpus after the fix | **0 of 304 designs move** — the guard only changes what an *unplaced* vent reports, and the simulation never queries one |
 
 ### P3-14 ✅🆕 `Plating` is the only component type with no tooltip override
 
@@ -1028,11 +1051,10 @@ design as safe".
    arithmetic, leaving only the `HU/t` / `EU/t` bundle label to check against upstream.
 7. ~~**P2-3** minor sweep~~ — **done and verified**; see above. (c) and (e) retracted as false positives.
 8. **P3 sweep** — ~~`needsCooldown`~~ (P3-1), ~~the dead `GGFuelRod` members~~ (P3-5),
-   ~~`catch (Throwable)`~~ (P3-4), ~~the overfill refusal~~ (P3-15) and ~~the `CoolantCell` sign
-   guard~~ (P3-6) are **done**; P3-16 is **retracted** (the pass-through is the game's rule, and relaxing
+   ~~`catch (Throwable)`~~ (P3-4), ~~the overfill refusal~~ (P3-15), ~~the `CoolantCell` sign
+   guard~~ (P3-6) and ~~the `Vent` null `parent`~~ (P3-13) are **done**; P3-16 is **retracted** (the pass-through is the game's rule, and relaxing
    it makes 4/304 designs look safe).
-   Remaining in this item: the stale `lastEUoutput`, `plannerResized`, and the
-   `parent` null guard in `Vent.getVentCoolingCapacity()`.
+   Remaining in this item: the stale `lastEUoutput` and `plannerResized`.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge.
 

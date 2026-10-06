@@ -88,7 +88,13 @@ public class Vent extends ReactorItem {
     @Override
     public double getVentCoolingCapacity() {
         double result = selfVent;
-        if (sideVent > 0) {
+        // An unplaced vent has no neighbours to cool, so its side-vent contribution is 0. The
+        // parent != null half of this guard is what keeps a ComponentFactory prototype queryable:
+        // only componentHeatVent has a non-zero sideVent, and parent stays null until addToReactor
+        // runs, so without it this method -- and producesOutput(), which calls it -- dereferences
+        // null. See CODE_REVIEW.md P3-13. dissipate() deliberately has no such guard: it is an
+        // action on the reactor, not a query, and it has no meaning outside one.
+        if (sideVent > 0 && parent != null) {
             ReactorItem component = parent.getComponentAt(row - 1, col);
             if (component != null && component.isCoolable()) {
                 result += sideVent;
