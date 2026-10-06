@@ -120,11 +120,11 @@ class ReactorPlannerFrameMappingTest {
         ReactorItem component = ComponentFactory.getDefaultComponent(baseName);
         assertNotNull(component, label + " mapped to '" + baseName + "', which is not a component");
         if (component instanceof Ic2ExpReactorPlanner.components.Plating) {
-            // Plating is the one type with no formatTooltip() override; the frame catches the
-            // resulting null and falls back to a bare name.
-            org.junit.jupiter.api.Assertions.assertNull(component.formatTooltip(), label + " is plating");
+            // Plating overrides formatTooltip() with an empty list: its Bundle strings are prose
+            // with no %s placeholders, so the frame appends them unchanged.
+            assertEquals(0, component.formatTooltip().length, label + " is plating and formats no values");
         } else {
-            assertNotNull(component.formatTooltip(), label + " has no tooltip data");
+            assertTrue(component.formatTooltip().length > 0, label + " has no tooltip data");
         }
     }
 

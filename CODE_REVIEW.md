@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (13 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (14 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **502** |
 
@@ -37,7 +37,7 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-2 the stale `lastEUoutput`, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -1074,12 +1074,54 @@ action on the reactor rather than a query about it.
 | also guard `dissipate()` (`if (parent == null) return 0.0;`) | **1 failed** — the same test, via its `assertThrows` line |
 | corpus after the fix | **0 of 304 designs move** — the guard only changes what an *unplaced* vent reports, and the simulation never queries one |
 
-### P3-14 ✅🆕 `Plating` is the only component type with no tooltip override
+### P3-14 ✅ FIXED 🆕 `Plating` is the only component type with no tooltip override
 
 `ReactorItem.formatTooltip()` returns `null` by default and `Plating` does not override it, so
 all three platings return `null`. `ReactorPlannerFrame.buildTooltipInfo` depends on catching the
 resulting `NullPointerException` and falling back to a bare name — an exception-driven code path
 that is easy to break. Pinned by `ComponentFactoryTest.onlyPlatingLacksATooltip`.
+
+#### ✅ Applied and verified — an empty override, and the fallback was never a bare name
+
+**The write-up above was wrong about what the UI shows.** `buildTooltipInfo:3279-3282` does not
+fall back to a bare name; the `catch` appends `getI18n("ComponentData." + compType)`, so all three
+plating tooltips already have text today:
+
+| UI label (`ComponentName.*`) | tooltip text today |
+|---|---|
+| Reactor Plating | `Crafting component for Containment and Heat-Capacity Reactor Plating` |
+| Heat-Capacity Reactor Plating | `Increases maximum heat capacity` |
+| Containment Reactor Plating | `Dampens explosions` |
+
+The `NullPointerException` is `BundleHelper.formatI18n:39-40` — `String.format(getI18n(key), args)`
+with `args == null`, because `ReactorItem.formatTooltip():517` returns `null`. "Plating" is the
+class name; the UI never shows it, those three labels are what the user sees.
+
+Unlike every other component, the three plating `ComponentData.*` strings carry **no `%s`**
+placeholders (`ComponentData.CoolantCell10k=Heat Capacity: %s` does), so there is nothing to format
+and no wording to invent. `Plating` now overrides with an empty argument list:
+
+```java
+@Override
+public String[] formatTooltip() {
+    return new String[0];
+}
+```
+
+`String.format("Dampens explosions", [])` returns that string unchanged, so **the tooltip output is
+byte-identical** and the exception-driven path is gone. The frame's `catch` stays as the fallback
+for any future component that still returns `null`.
+
+1. **Corpus: 0 of 304** — display-only by construction; tooltips are not in the fingerprint.
+2. **Suite: 502 passed / 0 failed / 0 skipped** with three assertions flipped deliberately to match:
+   `ComponentFactoryTest.tooltipsAreWellFormed`, `onlyPlatingLacksATooltip` (display name now
+   "plating is the only component type whose tooltip formats no values") and
+   `ReactorPlannerFrameMappingTest.everyTooltipLabelResolves`.
+3. **Mutation table: caught.** Removing the override fails exactly **5** tests — the two
+   `ComponentFactoryTest` assertions plus `everyTooltipLabelResolves` instances `[22]`, `[23]`,
+   `[24]`, the three plating labels. Clean isolation, no collateral. This is the one P3 fix in the
+   round that is genuinely test-observable, unlike P3-2 and P3-3's follow-up, whose tables read
+   *not caught — expected*.
 
 ### P3-15 ✅ FIXED 🆕 Overfill refusal in `adjustCurrentHeat` is off by one
 
@@ -1208,7 +1250,7 @@ Recorded so these are not re-investigated.
 | `getComponentList()` returns one line per component | It *aggregates* like `getMaterials()`, e.g. two rods render as a single `2 Fuel Rod (Uranium)`. Assumed otherwise at first; it is what the GUI shows.                                                                                                                                                                             |
 | `Reflector.getMaxDamage()` dividing by 3 on 1.7.10  | Correct and intentional. `maxDamage == 1` components (iridium reflector) are excluded, so indestructible parts stay indestructible                                                                                                                                                                                   |
 | `MaterialsList` rounding counts to 2 decimals      | By design: `UI.MaterialDecimalFormat` is `#,##0.##`. Only the rendered text rounds; the stored value keeps full precision                                                                                                                                                                                                       |
-| `Plating` being the only type without a tooltip     | Verified consistent, but see P3-14 — the frame depends on catching the resulting `NullPointerException`                                                                                                                                                                                                                       |
+| `Plating` being the only type without a tooltip     | Verified consistent, but see P3-14 — **fixed**: `Plating` now overrides with an empty list, so the frame's `catch` is only a fallback for future null-returning types. The fallback was never a bare name; it appends the unformatted `ComponentData.*` prose.                                                                                       |
 
 ---
 

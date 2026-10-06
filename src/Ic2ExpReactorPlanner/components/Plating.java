@@ -54,4 +54,15 @@ public class Plating extends ReactorItem {
         }
         super.removeFromReactor();
     }
+
+    @Override
+    public String[] formatTooltip() {
+        // The three plating Bundle strings ("Dampens explosions", "Increases maximum heat capacity"
+        // and "Crafting component for Containment and Heat-Capacity Reactor Plating") carry no %s
+        // placeholders, so there is nothing to format here. An empty argument list yields exactly
+        // the text ReactorPlannerFrame.buildTooltipInfo used to produce by catching the
+        // NullPointerException from the base class's null, so the tooltip output is unchanged and
+        // the exception-driven fallback path is gone.
+        return new String[0];
+    }
 }
