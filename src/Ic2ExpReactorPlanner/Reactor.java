@@ -9,8 +9,6 @@ import static Ic2ExpReactorPlanner.BundleHelper.formatI18n;
 import static Ic2ExpReactorPlanner.BundleHelper.getI18n;
 
 import Ic2ExpReactorPlanner.components.ReactorItem;
-import java.awt.HeadlessException;
-import javax.swing.JOptionPane;
 
 /**
  * Represents an IndustrialCraft2 Nuclear Reactor.
@@ -52,12 +50,39 @@ public class Reactor {
 
     private int resumeTemp = DEFAULT_RESUME_TEMP;
 
+    // The largest value the suspend/resume code fields can carry. Derived rather than copied: the
+    // store/extract bound has to be able to hold either field's own default, so once the two
+    // defaults diverge the bound follows the larger of them. Declared after both defaults because
+    // a field initializer reads them in declaration order. Public so the GUI spinners that offer
+    // these two fields declare the same range the format carries (CODE_REVIEW.md, spinner bounds).
+    public static final int CODE_TEMP_BOUND = Math.max(DEFAULT_SUSPEND_TEMP, DEFAULT_RESUME_TEMP);
+
+    // The largest value the current-heat code field can carry. It shares the number above by
+    // coincidence, not by design: this bounds a stored heat, not a default temperature, and it is
+    // unrelated to MAX_COMPONENT_HEAT.
+    private static final int CODE_HEAT_BOUND = (int) 120e3;
+
     private int maxSimulationTicks = (int) 5e6;
 
     // maximum paramatter types for a reactor component (current initial heat, automation threshold, reactor pause
     private static final int MAX_PARAM_TYPES = 3;
 
     public static final int MAX_COMPONENT_HEAT = 1_080_000;
+
+    // The largest automation threshold this build's code writer can encode. readCodeString takes
+    // its threshold bound from the revision ladder, which is 1e9 for the revision 4 codes this
+    // build writes, so writer and reader agree on this number; the GUI spinner is bounded by it
+    // too, which is why the constant is public (CODE_REVIEW.md P3-12 follow-up).
+    public static final int MAX_AUTOMATION_THRESHOLD = (int) 1e9;
+
+    // The remaining bounds the code format carries, named once and shared with the GUI spinners
+    // that offer the same fields. They were spelled as bare literals at ten sites here, seven in
+    // the frame and one in the component setter, which is how the threshold spinner came to declare
+    // a maximum nearly a thousand times smaller than the format's (P3-12); naming them makes that
+    // drift impossible rather than merely once-found.
+    public static final int MAX_PULSE_DURATION = (int) 5e6;
+    public static final int MAX_SIMULATION_TICKS = (int) 5e6;
+    public static final int MAX_REACTOR_PAUSE = (int) 10e3;
 
     public ReactorItem getComponentAt(final int row, final int column) {
         if (row >= 0 && row < grid.length && column >= 0 && column < grid[row].length) {
@@ -157,8 +182,18 @@ public class Reactor {
         MaterialsList result = new MaterialsList();
         for (int col = 0; col < grid[0].length; col++) {
             for (int row = 0; row < grid.length; row++) {
-                if (getComponentAt(row, col) != null) {
-                    result.add(MaterialsList.getMaterialsForComponent(getComponentAt(row, col)));
+                ReactorItem component = getComponentAt(row, col);
+                if (component != null) {
+                    // getMaterialsForComponent returns null for a baseName with no recipe entry.
+                    // MaterialsList.add rejects a null element outright, which is the right error
+                    // for a genuine misuse but the wrong one here: a component the planner has no
+                    // recipe for simply contributes nothing to the shopping list. All 72 factory
+                    // components have entries today, so this is a trap guard, not a live path.
+                    // See CODE_REVIEW.md P3-9.
+                    MaterialsList recipe = MaterialsList.getMaterialsForComponent(component);
+                    if (recipe != null) {
+                        result.add(recipe);
+                    }
                 }
             }
         }
@@ -209,161 +244,258 @@ public class Reactor {
 
     /**
      * Sets a code to configure the entire grid all at once.  Expects the code to have originally been output by getCode().
+     *
+     * <p><b>Strict parsing (CODE_REVIEW.md P1-1).</b> A code is either understood completely or
+     * refused completely: every reader below parses into locals and only then applies, and any
+     * input that trips a bounds or number-format problem is turned into a warning with the
+     * reactor left exactly as it was. Previously a malformed code could escape as an unchecked
+     * exception, or -- worse -- be applied halfway and then fail, leaving a design that was
+     * never in the code the user pasted.
+     *
      * @param code the code of the reactor setup to use.
      */
     public void setCode(final String code) {
+        if (code == null || code.isEmpty()) {
+            return;
+        }
+        try {
+            if (code.startsWith("erp=")) {
+                readCodeString(code.substring(4));
+            } else if (code.length() >= 108 && code.matches("[0-9A-Za-z(),|]+")) { // NOI18N
+                readLegacyCode(code);
+            } else {
+                String tempCode = code;
+                if (code.startsWith("http://www.talonfiremage.pwp.blueyonder.co.uk/v3/reactorplanner.html?")) { // NOI18N
+                    tempCode = code.replace(
+                            "http://www.talonfiremage.pwp.blueyonder.co.uk/v3/reactorplanner.html?", ""); // NOI18N
+                }
+                if (tempCode.matches("[0-9a-z]+")) { // NOI18N
+                    // Possibly a code from Talonius's old planner
+                    handleTaloniusCode(tempCode);
+                } else if (code.matches("[0-9A-Za-z+/=]+")) { // NOI18N
+                    // Try to handle it as a newer code with the "erp=" prefix stripped
+                    readCodeString(code);
+                } else {
+                    WarningDisplay.warn(
+                            getI18n("Warning.Title"), String.format(getI18n("Warning.InvalidReactorCode"), code));
+                }
+            }
+        } catch (IllegalArgumentException | IndexOutOfBoundsException e) {
+            // Every one of these means "this is not a code we can read", and none of them can be
+            // raised after this point: the readers apply only once parsing has fully succeeded.
+            // NumberFormatException extends IllegalArgumentException, and both
+            // ArrayIndexOutOfBoundsException and StringIndexOutOfBoundsException extend
+            // IndexOutOfBoundsException, so this covers bad base-36 digits, bad hex digits, a
+            // Base64 payload that will not decode, too many per-component parameters, and a
+            // truncated suffix -- without swallowing NullPointerException and friends, which
+            // would be real bugs rather than bad input.
+            //
+            // The exception's own message is appended when it has one. The deliberate refusals
+            // (too many parameters, an unsupported revision, an unencodable value) say what was
+            // wrong, which is the difference between a user fixing their paste and giving up. A
+            // raw bounds exception's message is less friendly but still better than nothing.
+            String message = String.format(getI18n("Warning.InvalidReactorCode"), code);
+            if (e.getMessage() != null && !e.getMessage().isEmpty()) {
+                message = message + "\n" + e.getMessage();
+            }
+            WarningDisplay.warn(getI18n("Warning.Title"), message);
+        }
+    }
+
+    /**
+     * Rejects a value the current code writer could not encode. {@code BigintStorage.store} throws
+     * for anything outside {@code [0, max]}, so accepting one here would make the reactor hold a
+     * state from which {@link #getCode()} throws.
+     */
+    private static void requireEncodable(final String what, final int value, final int max) {
+        if (value < 0 || value > max) {
+            throw new IllegalArgumentException(what + " of " + value + " is outside the encodable range of " + max);
+        }
+    }
+
+    /**
+     * Reads the pre-2.3.1 "old style" code: 108 hex digits of component ids with optional
+     * parenthesised per-component parameters, then a {@code |}-separated suffix of mode flags.
+     *
+     * <p>Parsed entirely into locals before anything is applied, so a truncated or over-long
+     * suffix cannot leave the grid loaded with half the mode flags set.
+     */
+    private void readLegacyCode(final String code) {
         int pos = 0;
         int[][] ids = new int[grid.length][grid[0].length];
         char[][][] paramTypes = new char[grid.length][grid[0].length][MAX_PARAM_TYPES];
         int[][][] params = new int[grid.length][grid[0].length][MAX_PARAM_TYPES];
-        if (code.startsWith("erp=")) {
-            readCodeString(code.substring(4));
-        } else if (code.length() >= 108 && code.matches("[0-9A-Za-z(),|]+")) { // NOI18N
-            try {
-                for (int row = 0; row < grid.length; row++) {
-                    for (int col = 0; col < grid[row].length; col++) {
-                        ids[row][col] = Integer.parseInt(code.substring(pos, pos + 2), 16);
-                        pos += 2;
-                        int paramNum = 0;
-                        if (pos + 1 < code.length() && code.charAt(pos) == '(') {
-                            paramTypes[row][col][paramNum] = code.charAt(pos + 1);
-                            int tempPos = pos + 2;
-                            StringBuilder param = new StringBuilder(10);
-                            while (tempPos < code.length() && code.charAt(tempPos) != ')') {
-                                if (code.charAt(tempPos) == ',') {
-                                    params[row][col][paramNum] = Integer.parseInt(param.toString(), 36);
-                                    paramNum++;
-                                    if (tempPos + 1 < code.length()) {
-                                        tempPos++;
-                                        paramTypes[row][col][paramNum] = code.charAt(tempPos);
-                                    }
-                                    param.setLength(0);
-                                } else {
-                                    param.append(code.charAt(tempPos));
-                                }
-                                tempPos++;
-                            }
+        for (int row = 0; row < grid.length; row++) {
+            for (int col = 0; col < grid[row].length; col++) {
+                ids[row][col] = Integer.parseInt(code.substring(pos, pos + 2), 16);
+                pos += 2;
+                int paramNum = 0;
+                if (pos + 1 < code.length() && code.charAt(pos) == '(') {
+                    paramTypes[row][col][paramNum] = code.charAt(pos + 1);
+                    int tempPos = pos + 2;
+                    StringBuilder param = new StringBuilder(10);
+                    while (tempPos < code.length() && code.charAt(tempPos) != ')') {
+                        if (code.charAt(tempPos) == ',') {
                             params[row][col][paramNum] = Integer.parseInt(param.toString(), 36);
-                            pos = tempPos + 1;
-                        }
-                    }
-                }
-                for (int row = 0; row < grid.length; row++) {
-                    for (int col = 0; col < grid[row].length; col++) {
-                        final ReactorItem component = ComponentFactory.createComponent(ids[row][col]);
-                        for (int paramNum = 0; paramNum < MAX_PARAM_TYPES; paramNum++) {
-                            switch (paramTypes[row][col][paramNum]) {
-                                case 'h':
-                                    component.setInitialHeat(params[row][col][paramNum]);
-                                    break;
-                                case 'a':
-                                    component.setAutomationThreshold(params[row][col][paramNum]);
-                                    break;
-                                case 'p':
-                                    component.setReactorPause(params[row][col][paramNum]);
-                                    break;
-                                default:
-                                    break;
+                            paramNum++;
+                            if (paramNum >= MAX_PARAM_TYPES) {
+                                // A fourth parameter would index past the end of the arrays. Refuse
+                                // the code rather than quietly dropping the extra settings.
+                                throw new IllegalArgumentException(
+                                        "too many parameters for the cell at row " + row + " column " + col);
                             }
+                            if (tempPos + 1 < code.length()) {
+                                tempPos++;
+                                paramTypes[row][col][paramNum] = code.charAt(tempPos);
+                            }
+                            param.setLength(0);
+                        } else {
+                            param.append(code.charAt(tempPos));
                         }
-                        setComponentAt(row, col, component);
+                        tempPos++;
                     }
+                    params[row][col][paramNum] = Integer.parseInt(param.toString(), 36);
+                    pos = tempPos + 1;
                 }
-                if (code.split("\\|").length > 1) {
-                    String extraCode = code.split("\\|")[1];
-                    switch (extraCode.charAt(0)) {
-                        case 'f':
-                            fluid = true;
-                            break;
-                        case 'e':
-                            fluid = false;
-                            break;
-                        default:
-                            break;
-                    }
-                    switch (extraCode.charAt(1)) {
-                        case 's':
-                            pulsed = false;
-                            automated = false;
-                            break;
-                        case 'p':
-                            pulsed = true;
-                            automated = false;
-                            break;
-                        case 'a':
-                            pulsed = true;
-                            automated = true;
-                            break;
-                        default:
-                            break;
-                    }
-                    switch (extraCode.charAt(2)) {
-                        case 'i':
-                            usingReactorCoolantInjectors = true;
-                            break;
-                        case 'n':
-                            usingReactorCoolantInjectors = false;
-                            break;
-                        default:
-                            break;
-                    }
-                    if (extraCode.length() > 3) {
-                        currentHeat = Integer.parseInt(extraCode.substring(3), 36);
-                    } else {
-                        currentHeat = 0;
-                    }
-                }
-                if (code.split("\\|").length > 2) {
-                    String[] moreCodes = code.split("\\|");
-                    for (int i = 2; i < moreCodes.length; i++) {
-                        switch (moreCodes[i].charAt(0)) {
-                            case 'n':
-                                onPulse = Integer.parseInt(moreCodes[i].substring(1), 36);
-                                break;
-                            case 'f':
-                                offPulse = Integer.parseInt(moreCodes[i].substring(1), 36);
-                                break;
-                            case 's':
-                                suspendTemp = Integer.parseInt(moreCodes[i].substring(1), 36);
-                                break;
-                            case 'r':
-                                resumeTemp = Integer.parseInt(moreCodes[i].substring(1), 36);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                }
-            } catch (NumberFormatException e) {
-                ExceptionDialogDisplay.showExceptionDialog(e);
-            }
-        } else {
-            String tempCode = code;
-            if (code.startsWith("http://www.talonfiremage.pwp.blueyonder.co.uk/v3/reactorplanner.html?")) { // NOI18N
-                tempCode = code.replace(
-                        "http://www.talonfiremage.pwp.blueyonder.co.uk/v3/reactorplanner.html?", ""); // NOI18N
-            }
-            if (tempCode.matches("[0-9a-z]+")) { // NOI18N
-                // Possibly a code from Talonius's old planner
-                handleTaloniusCode(tempCode);
-            } else if (code.matches("[0-9A-Za-z+/=]+")) { // NOI18N
-                // Try to handle it as a newer code with the "erp=" prefix stripped
-                readCodeString(code);
-            } else if (!code.isEmpty()) {
-                JOptionPane.showMessageDialog(
-                        null,
-                        String.format(getI18n("Warning.InvalidReactorCode"), code),
-                        getI18n("Warning.Title"),
-                        JOptionPane.WARNING_MESSAGE);
             }
         }
+
+        // The suffix is parsed into locals too, and it can no longer throw after the grid is
+        // applied, because the grid is not applied until further down.
+        boolean newFluid = fluid;
+        boolean newPulsed = pulsed;
+        boolean newAutomated = automated;
+        boolean newInjectors = usingReactorCoolantInjectors;
+        int newCurrentHeat = 0;
+        boolean haveCurrentHeat = false;
+        int newOnPulse = onPulse;
+        int newOffPulse = offPulse;
+        int newSuspendTemp = suspendTemp;
+        int newResumeTemp = resumeTemp;
+
+        String[] parts = code.split("\\|");
+        if (parts.length > 1) {
+            String extraCode = parts[1];
+            switch (extraCode.charAt(0)) {
+                case 'f':
+                    newFluid = true;
+                    break;
+                case 'e':
+                    newFluid = false;
+                    break;
+                default:
+                    break;
+            }
+            switch (extraCode.charAt(1)) {
+                case 's':
+                    newPulsed = false;
+                    newAutomated = false;
+                    break;
+                case 'p':
+                    newPulsed = true;
+                    newAutomated = false;
+                    break;
+                case 'a':
+                    newPulsed = true;
+                    newAutomated = true;
+                    break;
+                default:
+                    break;
+            }
+            switch (extraCode.charAt(2)) {
+                case 'i':
+                    newInjectors = true;
+                    break;
+                case 'n':
+                    newInjectors = false;
+                    break;
+                default:
+                    break;
+            }
+            if (extraCode.length() > 3) {
+                newCurrentHeat = Integer.parseInt(extraCode.substring(3), 36);
+                haveCurrentHeat = true;
+            }
+        }
+        for (int i = 2; i < parts.length; i++) {
+            switch (parts[i].charAt(0)) {
+                case 'n':
+                    newOnPulse = Integer.parseInt(parts[i].substring(1), 36);
+                    break;
+                case 'f':
+                    newOffPulse = Integer.parseInt(parts[i].substring(1), 36);
+                    break;
+                case 's':
+                    newSuspendTemp = Integer.parseInt(parts[i].substring(1), 36);
+                    break;
+                case 'r':
+                    newResumeTemp = Integer.parseInt(parts[i].substring(1), 36);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // The legacy format can express values the current code writer cannot encode, because
+        // each field is stored in base 36 with no bound. Accepting one would leave the reactor
+        // holding a value that makes the *next* getCode() throw from BigintStorage.store, so a
+        // code we could not faithfully re-encode is refused here instead.
+        if (haveCurrentHeat) {
+            requireEncodable("current heat", newCurrentHeat, CODE_HEAT_BOUND);
+        }
+        requireEncodable("on-pulse", newOnPulse, MAX_PULSE_DURATION);
+        requireEncodable("off-pulse", newOffPulse, MAX_PULSE_DURATION);
+        requireEncodable("suspend temperature", newSuspendTemp, CODE_TEMP_BOUND);
+        requireEncodable("resume temperature", newResumeTemp, CODE_TEMP_BOUND);
+        if (newOnPulse + newOffPulse > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("the pulse durations overflow");
+        }
+
+        // Parsing is complete and nothing above has touched the reactor, so from here on nothing
+        // can fail and the application is all-or-nothing.
+        for (int row = 0; row < grid.length; row++) {
+            for (int col = 0; col < grid[row].length; col++) {
+                final ReactorItem component = ComponentFactory.createComponent(ids[row][col]);
+                for (int paramNum = 0; paramNum < MAX_PARAM_TYPES; paramNum++) {
+                    switch (paramTypes[row][col][paramNum]) {
+                        case 'h':
+                            component.setInitialHeat(params[row][col][paramNum]);
+                            break;
+                        case 'a':
+                            component.setAutomationThreshold(params[row][col][paramNum]);
+                            break;
+                        case 'p':
+                            component.setReactorPause(params[row][col][paramNum]);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                setComponentAt(row, col, component);
+            }
+        }
+        fluid = newFluid;
+        pulsed = newPulsed;
+        automated = newAutomated;
+        usingReactorCoolantInjectors = newInjectors;
+        if (haveCurrentHeat) {
+            currentHeat = newCurrentHeat;
+        }
+        onPulse = newOnPulse;
+        offPulse = newOffPulse;
+        suspendTemp = newSuspendTemp;
+        resumeTemp = newResumeTemp;
     }
 
-    private void handleTaloniusCode(String tempCode) throws HeadlessException {
+    private void handleTaloniusCode(String tempCode) {
         StringBuilder warnings = new StringBuilder(500);
+        // Buffered rather than applied, so a code this planner cannot fully read leaves the
+        // existing design intact (CODE_REVIEW.md P1-1).
+        ReactorItem[][] parsed = new ReactorItem[grid.length][grid[0].length];
+        int newCurrentHeat;
         TaloniusDecoder decoder = new TaloniusDecoder(tempCode);
         // initial heat, in multiples of 100
-        currentHeat = 100 * decoder.readInt(10);
+        newCurrentHeat = 100 * decoder.readInt(10);
         // reactor grid
         for (int x = 8; x >= 0; x--) {
             for (int y = 5; y >= 0; y--) {
@@ -377,88 +509,88 @@ public class Reactor {
 
                 switch (nextValue) {
                     case 0:
-                        setComponentAt(y, x, null);
+                        parsed[y][x] = null;
                         break;
                     case 1:
-                        setComponentAt(y, x, ComponentFactory.createComponent("fuelRodUranium"));
+                        parsed[y][x] = ComponentFactory.createComponent("fuelRodUranium");
                         break;
                     case 2:
-                        setComponentAt(y, x, ComponentFactory.createComponent("dualFuelRodUranium"));
+                        parsed[y][x] = ComponentFactory.createComponent("dualFuelRodUranium");
                         break;
                     case 3:
-                        setComponentAt(y, x, ComponentFactory.createComponent("quadFuelRodUranium"));
+                        parsed[y][x] = ComponentFactory.createComponent("quadFuelRodUranium");
                         break;
                     case 4:
                         warnings.append(formatI18n("Warning.DepletedIsotope", y, x));
                         break;
                     case 5:
-                        setComponentAt(y, x, ComponentFactory.createComponent("neutronReflector"));
+                        parsed[y][x] = ComponentFactory.createComponent("neutronReflector");
                         break;
                     case 6:
-                        setComponentAt(y, x, ComponentFactory.createComponent("thickNeutronReflector"));
+                        parsed[y][x] = ComponentFactory.createComponent("thickNeutronReflector");
                         break;
                     case 7:
-                        setComponentAt(y, x, ComponentFactory.createComponent("heatVent"));
+                        parsed[y][x] = ComponentFactory.createComponent("heatVent");
                         break;
                     case 8:
-                        setComponentAt(y, x, ComponentFactory.createComponent("reactorHeatVent"));
+                        parsed[y][x] = ComponentFactory.createComponent("reactorHeatVent");
                         break;
                     case 9:
-                        setComponentAt(y, x, ComponentFactory.createComponent("overclockedHeatVent"));
+                        parsed[y][x] = ComponentFactory.createComponent("overclockedHeatVent");
                         break;
                     case 10:
-                        setComponentAt(y, x, ComponentFactory.createComponent("advancedHeatVent"));
+                        parsed[y][x] = ComponentFactory.createComponent("advancedHeatVent");
                         break;
                     case 11:
-                        setComponentAt(y, x, ComponentFactory.createComponent("componentHeatVent"));
+                        parsed[y][x] = ComponentFactory.createComponent("componentHeatVent");
                         break;
                     case 12:
-                        setComponentAt(y, x, ComponentFactory.createComponent("rshCondensator"));
+                        parsed[y][x] = ComponentFactory.createComponent("rshCondensator");
                         break;
                     case 13:
-                        setComponentAt(y, x, ComponentFactory.createComponent("lzhCondensator"));
+                        parsed[y][x] = ComponentFactory.createComponent("lzhCondensator");
                         break;
                     case 14:
-                        setComponentAt(y, x, ComponentFactory.createComponent("heatExchanger"));
+                        parsed[y][x] = ComponentFactory.createComponent("heatExchanger");
                         break;
                     case 15:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coreHeatExchanger"));
+                        parsed[y][x] = ComponentFactory.createComponent("coreHeatExchanger");
                         break;
                     case 16:
-                        setComponentAt(y, x, ComponentFactory.createComponent("componentHeatExchanger"));
+                        parsed[y][x] = ComponentFactory.createComponent("componentHeatExchanger");
                         break;
                     case 17:
-                        setComponentAt(y, x, ComponentFactory.createComponent("advancedHeatExchanger"));
+                        parsed[y][x] = ComponentFactory.createComponent("advancedHeatExchanger");
                         break;
                     case 18:
-                        setComponentAt(y, x, ComponentFactory.createComponent("reactorPlating"));
+                        parsed[y][x] = ComponentFactory.createComponent("reactorPlating");
                         break;
                     case 19:
-                        setComponentAt(y, x, ComponentFactory.createComponent("heatCapacityReactorPlating"));
+                        parsed[y][x] = ComponentFactory.createComponent("heatCapacityReactorPlating");
                         break;
                     case 20:
-                        setComponentAt(y, x, ComponentFactory.createComponent("containmentReactorPlating"));
+                        parsed[y][x] = ComponentFactory.createComponent("containmentReactorPlating");
                         break;
                     case 21:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCell10k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCell10k");
                         break;
                     case 22:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCell30k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCell30k");
                         break;
                     case 23:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCell60k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCell60k");
                         break;
                     case 24:
                         warnings.append(formatI18n("Warning.Heating", y, x));
                         break;
                     case 32:
-                        setComponentAt(y, x, ComponentFactory.createComponent("fuelRodThorium"));
+                        parsed[y][x] = ComponentFactory.createComponent("fuelRodThorium");
                         break;
                     case 33:
-                        setComponentAt(y, x, ComponentFactory.createComponent("dualFuelRodThorium"));
+                        parsed[y][x] = ComponentFactory.createComponent("dualFuelRodThorium");
                         break;
                     case 34:
-                        setComponentAt(y, x, ComponentFactory.createComponent("quadFuelRodThorium"));
+                        parsed[y][x] = ComponentFactory.createComponent("quadFuelRodThorium");
                         break;
                     case 35:
                         warnings.append(formatI18n("Warning.Plutonium", y, x));
@@ -470,25 +602,25 @@ public class Reactor {
                         warnings.append(formatI18n("Warning.QuadPlutonium", y, x));
                         break;
                     case 38:
-                        setComponentAt(y, x, ComponentFactory.createComponent("iridiumNeutronReflector"));
+                        parsed[y][x] = ComponentFactory.createComponent("iridiumNeutronReflector");
                         break;
                     case 39:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCellHelium60k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCellHelium60k");
                         break;
                     case 40:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCellHelium180k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCellHelium180k");
                         break;
                     case 41:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCellHelium360k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCellHelium360k");
                         break;
                     case 42:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCellNak60k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCellNak60k");
                         break;
                     case 43:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCellNak180k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCellNak180k");
                         break;
                     case 44:
-                        setComponentAt(y, x, ComponentFactory.createComponent("coolantCellNak360k"));
+                        parsed[y][x] = ComponentFactory.createComponent("coolantCellNak360k");
                         break;
                     default:
                         warnings.append(formatI18n("Warning.Unrecognized", nextValue, y, x));
@@ -496,36 +628,54 @@ public class Reactor {
                 }
             }
         }
+        // The whole grid is known now, so apply it in one go.
+        for (int row = 0; row < grid.length; row++) {
+            for (int col = 0; col < grid[row].length; col++) {
+                setComponentAt(row, col, parsed[row][col]);
+            }
+        }
+        currentHeat = newCurrentHeat;
         if (warnings.length() > 0) {
             warnings.setLength(warnings.length() - 1); // to remove last newline character
-            JOptionPane.showMessageDialog(null, warnings, getI18n("Warning.Title"), JOptionPane.WARNING_MESSAGE);
+            WarningDisplay.warn(getI18n("Warning.Title"), warnings.toString());
         }
     }
 
-    // reads a Base64 code string for the reactor, after stripping the prefix.
+    /**
+     * Reads a Base64 code string for the reactor, after stripping the prefix.
+     *
+     * <p>Parsed entirely into locals before anything is applied, so an unreadable code leaves the
+     * reactor untouched (CODE_REVIEW.md P1-1).
+     */
     private void readCodeString(final String code) {
         BigintStorage storage = BigintStorage.inputBase64(code);
         // read the code revision from the code itself instead of making it part of the prefix.
         int codeRevision = storage.extract(255);
+        // Check if the code revision is supported yet. Refuse rather than guess: the field
+        // widths below change between revisions, so a revision we do not know is a code whose
+        // layout we cannot read.
+        if (codeRevision > 4) {
+            throw new IllegalArgumentException("Unsupported code revision " + codeRevision + " in reactor code.");
+        }
         int maxComponentHeat;
         if (codeRevision == 4) maxComponentHeat = (int) 1e9;
         else if (codeRevision == 3) maxComponentHeat = (int) 1080e3;
         else maxComponentHeat = (int) 360e3;
-        // Check if the code revision is supported yet.
-        if (codeRevision > 4) {
-            throw new IllegalArgumentException("Unsupported code revision in reactor code.");
-        }
+
+        boolean newPulsed = pulsed;
+        boolean newAutomated = automated;
         // for code revision 1 or newer, read whether the reactor is pulsed and/or automated next.
         if (codeRevision >= 1) {
-            pulsed = storage.extract(1) > 0;
-            automated = storage.extract(1) > 0;
+            newPulsed = storage.extract(1) > 0;
+            newAutomated = storage.extract(1) > 0;
         }
-        // read the grid next
+
+        ReactorItem[][] parsed = new ReactorItem[grid.length][grid[0].length];
         for (int row = 0; row < grid.length; row++) {
             for (int col = 0; col < grid[row].length; col++) {
-                int componentId = 0;
-                // Changes may be coming to the number of components available, so make sure to check the code revision
-                // number.
+                int componentId;
+                // Changes may be coming to the number of components available, so make sure to
+                // check the code revision number.
                 if (codeRevision <= 1) {
                     componentId = storage.extract(38);
                 } else if (codeRevision == 2) {
@@ -535,59 +685,89 @@ public class Reactor {
                 } else {
                     componentId = storage.extract(72);
                 }
-                if (componentId != 0) {
-                    ReactorItem component = ComponentFactory.createComponent(componentId);
-                    int hasSpecialAutomationConfig = storage.extract(1);
-                    if (hasSpecialAutomationConfig > 0) {
-                        if (component != null) {
-                            component.setInitialHeat(storage.extract(maxComponentHeat));
-                        }
-                        if (codeRevision == 0 || (codeRevision >= 1 && automated)) {
-                            if (component != null) {
-                                component.setAutomationThreshold(storage.extract(maxComponentHeat));
-                            }
-                            if (component != null) {
-                                component.setReactorPause(storage.extract((int) 10e3));
-                            }
+                if (componentId == 0) {
+                    parsed[row][col] = null;
+                    continue;
+                }
+                ReactorItem component = ComponentFactory.createComponent(componentId);
+                // The automation fields are consumed from the stream whether or not this build can
+                // instantiate the component, so the reader stays in step with the writer even for
+                // a payload naming an id that has since been dropped. Defence in depth: every
+                // revision's id field is narrower than the component registry, so a code produced
+                // by buildCodeString can never actually reach the null case.
+                if (storage.extract(1) > 0) {
+                    int initialHeat = storage.extract(maxComponentHeat);
+                    int threshold = 0;
+                    int pause = 0;
+                    if (codeRevision == 0 || newAutomated) {
+                        threshold = storage.extract(maxComponentHeat);
+                        pause = storage.extract(MAX_REACTOR_PAUSE);
+                    }
+                    if (component != null) {
+                        component.setInitialHeat(initialHeat);
+                        if (codeRevision == 0 || newAutomated) {
+                            component.setAutomationThreshold(threshold);
+                            component.setReactorPause(pause);
                         }
                     }
-                    setComponentAt(row, col, component);
-                } else {
-                    setComponentAt(row, col, null);
                 }
+                parsed[row][col] = component;
             }
         }
-        // next, read the inital temperature and other details.
-        currentHeat = storage.extract((int) 120e3);
-        if (codeRevision == 0 || (codeRevision >= 1 && pulsed)) {
-            onPulse = storage.extract((int) 5e6);
-            offPulse = storage.extract((int) 5e6);
-            suspendTemp = storage.extract((int) 120e3);
-            resumeTemp = storage.extract((int) 120e3);
+
+        // next, read the initial temperature and other details.
+        int newCurrentHeat = storage.extract(CODE_HEAT_BOUND);
+        int newOnPulse = onPulse;
+        int newOffPulse = offPulse;
+        int newSuspendTemp = suspendTemp;
+        int newResumeTemp = resumeTemp;
+        if (codeRevision == 0 || newPulsed) {
+            newOnPulse = storage.extract(MAX_PULSE_DURATION);
+            newOffPulse = storage.extract(MAX_PULSE_DURATION);
+            newSuspendTemp = storage.extract(CODE_TEMP_BOUND);
+            newResumeTemp = storage.extract(CODE_TEMP_BOUND);
         }
-        fluid = storage.extract(1) > 0;
-        usingReactorCoolantInjectors = storage.extract(1) > 0;
+        boolean newFluid = storage.extract(1) > 0;
+        boolean newInjectors = storage.extract(1) > 0;
         if (codeRevision == 0) {
-            pulsed = storage.extract(1) > 0;
-            automated = storage.extract(1) > 0;
+            newPulsed = storage.extract(1) > 0;
+            newAutomated = storage.extract(1) > 0;
         }
-        maxSimulationTicks = storage.extract((int) 5e6);
+        int newMaxSimulationTicks = storage.extract(MAX_SIMULATION_TICKS);
+
+        // Parsing is complete and nothing above has touched the reactor, so from here on nothing
+        // can fail and the application is all-or-nothing.
+        for (int row = 0; row < grid.length; row++) {
+            for (int col = 0; col < grid[row].length; col++) {
+                setComponentAt(row, col, parsed[row][col]);
+            }
+        }
+        pulsed = newPulsed;
+        automated = newAutomated;
+        currentHeat = newCurrentHeat;
+        onPulse = newOnPulse;
+        offPulse = newOffPulse;
+        suspendTemp = newSuspendTemp;
+        resumeTemp = newResumeTemp;
+        fluid = newFluid;
+        usingReactorCoolantInjectors = newInjectors;
+        maxSimulationTicks = newMaxSimulationTicks;
     }
 
     // builds a Base64 code string, not including the prefix.
     private String buildCodeString() {
         BigintStorage storage = new BigintStorage();
         // first, store the extra details, in reverse order of expected reading.
-        storage.store(maxSimulationTicks, (int) 5e6);
+        storage.store(maxSimulationTicks, MAX_SIMULATION_TICKS);
         storage.store(usingReactorCoolantInjectors ? 1 : 0, 1);
         storage.store(fluid ? 1 : 0, 1);
         if (pulsed) {
-            storage.store(resumeTemp, (int) 120e3);
-            storage.store(suspendTemp, (int) 120e3);
-            storage.store(offPulse, (int) 5e6);
-            storage.store(onPulse, (int) 5e6);
+            storage.store(resumeTemp, CODE_TEMP_BOUND);
+            storage.store(suspendTemp, CODE_TEMP_BOUND);
+            storage.store(offPulse, MAX_PULSE_DURATION);
+            storage.store(onPulse, MAX_PULSE_DURATION);
         }
-        storage.store((int) currentHeat, (int) 120e3);
+        storage.store((int) currentHeat, CODE_HEAT_BOUND);
         // grid is read (almost) first, so written (almost) last, and in reverse order
         for (int row = grid.length - 1; row >= 0; row--) {
             for (int col = grid[row].length - 1; col >= 0; col--) {
@@ -602,8 +782,8 @@ public class Reactor {
                             || component.getReactorPause()
                                     != ComponentFactory.getDefaultComponent(id).getReactorPause()) {
                         if (automated) {
-                            storage.store(component.getReactorPause(), (int) 10e3);
-                            storage.store(component.getAutomationThreshold(), (int) 1e9);
+                            storage.store(component.getReactorPause(), MAX_REACTOR_PAUSE);
+                            storage.store(component.getAutomationThreshold(), MAX_AUTOMATION_THRESHOLD);
                         }
                         storage.store((int) component.getInitialHeat(), (int) 1e9);
                         storage.store(1, 1);
@@ -693,7 +873,7 @@ public class Reactor {
         if (pulsed && suspendTemp != DEFAULT_SUSPEND_TEMP) {
             result.append(String.format("|s%s", Integer.toString(suspendTemp, 36)));
         }
-        if (pulsed && resumeTemp != DEFAULT_SUSPEND_TEMP) {
+        if (pulsed && resumeTemp != DEFAULT_RESUME_TEMP) {
             result.append(String.format("|r%s", Integer.toString(resumeTemp, 36)));
         }
         return result.toString();

@@ -32,8 +32,17 @@ public class CoolantCell extends ReactorItem {
 
     @Override
     public double adjustCurrentHeat(final double heat) {
-        currentCellCooling += heat;
-        bestCellCooling = Math.max(currentCellCooling, bestCellCooling);
+        // The cell's cooling credit is the heat it absorbs, so only a positive adjustment counts --
+        // draining the cell is not "negative cooling". Condensator guards the same way, by
+        // early-returning on heat < 0. Unguarded, a component heat vent draining this cell
+        // (Vent.handleSideVentCooling passes -sideVent) decrements the running figure, so +500,
+        // -900, -2000, +300 left currentCellCooling at -2 100. bestCellCooling is what the report
+        // prints ("ReceivedHeat" / "Total Cell Cooling") and it is a Math.max, so the dip was
+        // invisible in the UI; the guard makes the running figure agree with the peak. See CODE_REVIEW.md P3-6.
+        if (heat > 0.0) {
+            currentCellCooling += heat;
+            bestCellCooling = Math.max(currentCellCooling, bestCellCooling);
+        }
         return super.adjustCurrentHeat(heat);
     }
 

@@ -143,6 +143,72 @@ class ReactorItemTest {
                 assertEquals(0, item.getReactorPause(), baseName + " is inert");
             }
         }
+
+        @Test
+        @DisplayName("a pause beyond the reactor code's bound is refused")
+        void pauseBeyondTheCodeBoundIsRefused() {
+            Reactor reactor = new Reactor();
+            reactor.setAutomated(true);
+            ReactorItem cell = place(reactor, 2, 2, "coolantCell60k");
+
+            cell.setReactorPause((int) 10e3);
+            assertEquals((int) 10e3, cell.getReactorPause(), "the spinner's own maximum is accepted");
+            cell.setReactorPause(500);
+            assertEquals(500, cell.getReactorPause(), "an ordinary value is accepted");
+            cell.setReactorPause((int) 10e3 + 1);
+            assertEquals(500, cell.getReactorPause(), "one past the bound is refused, not clamped down to it");
+            cell.setReactorPause(-1);
+            assertEquals(500, cell.getReactorPause(), "a negative is refused, not clamped up to zero");
+
+            // The writer stores the pause with a bound of 10e3, so an out-of-range value would make
+            // getCode() throw a bare IllegalArgumentException. Keeping the stored value in range is
+            // what makes the round-trip below possible at all (CODE_REVIEW.md P3-12).
+            String code = reactor.getCode();
+            Reactor back = new Reactor();
+            back.setCode(code);
+            assertEquals(500, back.getComponentAt(2, 2).getReactorPause(), "pause survives the code");
+        }
+
+        @Test
+        @DisplayName("a threshold is bounded to the range the code format can carry")
+        void thresholdIsBoundedToTheCodeFormat() {
+            ReactorItem item = ComponentFactory.createComponent("coolantCell60k");
+
+            item.setAutomationThreshold(500_000_000);
+            assertEquals(
+                    500_000_000,
+                    item.getAutomationThreshold(),
+                    "a rev-4 code legitimately carries a threshold above the component's capacity");
+            item.setAutomationThreshold(Reactor.MAX_AUTOMATION_THRESHOLD);
+            assertEquals(
+                    Reactor.MAX_AUTOMATION_THRESHOLD,
+                    item.getAutomationThreshold(),
+                    "the writer's own bound is accepted, so the round trip below is possible");
+            item.setAutomationThreshold(Reactor.MAX_AUTOMATION_THRESHOLD + 1);
+            assertEquals(
+                    Reactor.MAX_AUTOMATION_THRESHOLD,
+                    item.getAutomationThreshold(),
+                    "one past the bound is refused, not clamped down to it");
+            item.setAutomationThreshold(-1);
+            assertEquals(Reactor.MAX_AUTOMATION_THRESHOLD, item.getAutomationThreshold(), "a negative is refused");
+
+            // Keeping the stored value inside the writer's bound is what makes getCode() work at
+            // all: an out-of-range threshold throws a bare IllegalArgumentException out of
+            // BigintStorage.store, on the reactor that is already fully applied (CODE_REVIEW.md P3-12
+            // and P1-5). The reader takes its threshold bound from the revision ladder, which is the
+            // same number for the revision 4 codes this build writes, so the value survives.
+            Reactor reactor = new Reactor();
+            reactor.setAutomated(true);
+            ReactorItem placed = place(reactor, 2, 2, "coolantCell60k");
+            placed.setAutomationThreshold(Reactor.MAX_AUTOMATION_THRESHOLD);
+            String code = reactor.getCode();
+            Reactor back = new Reactor();
+            back.setCode(code);
+            assertEquals(
+                    Reactor.MAX_AUTOMATION_THRESHOLD,
+                    back.getComponentAt(2, 2).getAutomationThreshold(),
+                    "the largest encodable threshold survives the code");
+        }
     }
 
     // ================================================================== heat clamping
@@ -160,17 +226,23 @@ class ReactorItemTest {
             assertClose(0, cell.adjustCurrentHeat(1000), 1e-9, "nothing refused");
             assertClose(1000, cell.getCurrentHeat(), 1e-9);
 
-            // Overfill is reported as a negative return. Note the arithmetic is
-            // maxHeat - tempHeat + 1, so for an overflow of N the caller is told -(N - 1).
-            // With tempHeat = 1 000 + 100 000 = 101 000 that is 60 000 - 101 000 + 1 = -40 999.
-            assertClose(-40999, cell.adjustCurrentHeat(100000), 1e-9, "capacity is reported as a refusal");
+            // Overfill is reported as a negative return, and the amount is exact: tempHeat =
+            // 1 000 + 100 000 = 101 000 against a 60 000 capacity accepts 59 000 and refuses 41 000,
+            // so the return is 60 000 - 101 000 = -41 000 (CODE_REVIEW.md P3-15; the old "+ 1"
+            // reported an overflow of N as -(N - 1)).
+            assertClose(-41000, cell.adjustCurrentHeat(100000), 1e-9, "capacity is reported as a refusal");
             assertClose(60000, cell.getCurrentHeat(), 1e-9, "clamped at the top");
         }
 
         /**
-         * A component at or above its capacity is <i>broken</i>, which makes
-         * {@code isHeatAcceptor()} false, which turns {@code adjustCurrentHeat} into a pass-through
-         * that returns the adjustment untouched instead of clamping it.
+         * A component at or above its capacity is <i>broken</i>, which makes {@code isHeatAcceptor()}
+         * false, which turns {@code adjustCurrentHeat} into a pass-through that returns the
+         * adjustment untouched instead of clamping it. That is deliberate, not an accident of the
+         * guard: broken means "accepts nothing", and a coolant cell that reaches capacity is broken
+         * in game and cannot be drained by cooling it. Relaxing the guard to {@code maxHeat > 1}
+         * would let the simulation drain a full cell and would report an overheating design as safe
+         * (4 of 304 corpus designs stop exploding), so this test is the thing that keeps it honest.
+         * See CODE_REVIEW.md P3-16.
          */
         @Test
         @DisplayName("a full (broken) component passes adjustments straight through")

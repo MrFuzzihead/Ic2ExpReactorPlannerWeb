@@ -110,6 +110,20 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
 
     private String prevReactorOldCode = null;
 
+    // P2-1: scaling an icon allocates a fresh BufferedImage and, because ImageIcon(Image) loads
+    // asynchronously, a loader thread. plannerResized fires on every layout pass and updateReactorButtons
+    // runs on every keystroke, so the scaled result is cached per (source image, pixel size) and the
+    // same ImageIcon instance is reused across buttons. Keyed by image identity, which is what
+    // ComponentFactory prototypes and copy() share, so two instances of one component type cost one entry.
+    private static java.util.HashMap<Image, java.util.HashMap<Integer, ImageIcon>> iconCache =
+            new java.util.HashMap<Image, java.util.HashMap<Integer, ImageIcon>>();
+
+    // A resize drag visits a new pixel size per event, so the cache has to be bounded or it retains
+    // every intermediate. Clearing it wholesale keeps the steady-state win and caps the memory.
+    public static final int ICON_CACHE_LIMIT = 512;
+
+    private static int iconCacheEntries = 0;
+
     /**
      * Creates new form ReactorPlannerFrame
      */
@@ -279,9 +293,8 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
                                 reactorButtons[finalRow][finalCol].getWidth(),
                                 reactorButtons[finalRow][finalCol].getHeight());
                         if (buttonSize > 2 && componentToPlace != null && componentToPlace.image != null) {
-                            reactorButtons[finalRow][finalCol].setIcon(
-                                    new ImageIcon(componentToPlace.image.getScaledInstance(
-                                            buttonSize * 8 / 10, buttonSize * 8 / 10, Image.SCALE_FAST)));
+                            setComponentIcon(
+                                    reactorButtons[finalRow][finalCol], componentToPlace.image, buttonSize);
                             reactorButtons[finalRow][finalCol].setToolTipText(componentToPlace.toString());
                             reactorButtons[finalRow][finalCol].setBackground(Color.LIGHT_GRAY);
                         } else {
@@ -665,7 +678,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         pulsePanel.add(jLabel3, gridBagConstraints);
 
-        onPulseSpinner.setModel(new javax.swing.SpinnerNumberModel(5000000, 0, 5000000, 1));
+        onPulseSpinner.setModel(pulseDurationModel(5000000));
         onPulseSpinner.setMinimumSize(new java.awt.Dimension(80, 20));
         onPulseSpinner.setPreferredSize(new java.awt.Dimension(80, 20));
         onPulseSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -688,7 +701,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 12, 2, 2);
         pulsePanel.add(jLabel7, gridBagConstraints);
 
-        offPulseSpinner.setModel(new javax.swing.SpinnerNumberModel(0, 0, 5000000, 1));
+        offPulseSpinner.setModel(pulseDurationModel(0));
         offPulseSpinner.setMinimumSize(new java.awt.Dimension(80, 20));
         offPulseSpinner.setPreferredSize(new java.awt.Dimension(80, 20));
         offPulseSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -720,7 +733,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         pulsePanel.add(jLabel9, gridBagConstraints);
 
-        suspendTempSpinner.setModel(new javax.swing.SpinnerNumberModel(120000, 0, 120000, 1));
+        suspendTempSpinner.setModel(temperatureModel(120000));
         suspendTempSpinner.setMinimumSize(new java.awt.Dimension(80, 20));
         suspendTempSpinner.setPreferredSize(new java.awt.Dimension(80, 20));
         suspendTempSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -739,7 +752,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 12, 2, 2);
         pulsePanel.add(jLabel10, gridBagConstraints);
 
-        resumeTempSpinner.setModel(new javax.swing.SpinnerNumberModel(120000, 0, 120000, 1));
+        resumeTempSpinner.setModel(temperatureModel(120000));
         resumeTempSpinner.setMinimumSize(new java.awt.Dimension(80, 20));
         resumeTempSpinner.setPreferredSize(new java.awt.Dimension(80, 20));
         resumeTempSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1287,7 +1300,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         temperatureAndComponentsPanel.add(placingThresholdLabel, gridBagConstraints);
 
-        placingThresholdSpinner.setModel(new javax.swing.SpinnerNumberModel(9000, 0, Reactor.MAX_COMPONENT_HEAT, 1));
+        placingThresholdSpinner.setModel(automationThresholdModel(9000));
         placingThresholdSpinner.setMinimumSize(new java.awt.Dimension(100, 20));
         placingThresholdSpinner.setPreferredSize(new java.awt.Dimension(100, 20));
         placingThresholdSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1306,7 +1319,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         temperatureAndComponentsPanel.add(placingReactorPauseLabel, gridBagConstraints);
 
-        placingReactorPauseSpinner.setModel(new javax.swing.SpinnerNumberModel(0, 0, 10000, 1));
+        placingReactorPauseSpinner.setModel(pauseModel(0));
         placingReactorPauseSpinner.setMinimumSize(new java.awt.Dimension(100, 20));
         placingReactorPauseSpinner.setPreferredSize(new java.awt.Dimension(100, 20));
         placingReactorPauseSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1443,7 +1456,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         maxSimulationTicksLabel.setText(bundle.getString("UI.MaxSimulationTicks")); // NOI18N
         jPanel7.add(maxSimulationTicksLabel);
 
-        maxSimulationTicksSpinner.setModel(new javax.swing.SpinnerNumberModel(5000000, 0, 5000000, 1));
+        maxSimulationTicksSpinner.setModel(tickLimitModel(5000000));
         maxSimulationTicksSpinner.setToolTipText(bundle.getString("UI.MaxSimulationTicksTooltip")); // NOI18N
         maxSimulationTicksSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
@@ -1556,7 +1569,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         automationPanel.add(jLabel12, gridBagConstraints);
 
-        thresholdSpinner.setModel(new javax.swing.SpinnerNumberModel(9000, 0, Reactor.MAX_COMPONENT_HEAT, 1));
+        thresholdSpinner.setModel(automationThresholdModel(9000));
         thresholdSpinner.setMinimumSize(new java.awt.Dimension(100, 20));
         thresholdSpinner.setPreferredSize(new java.awt.Dimension(100, 20));
         thresholdSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1585,7 +1598,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         automationPanel.add(jLabel14, gridBagConstraints);
 
-        pauseSpinner.setModel(new javax.swing.SpinnerNumberModel(0, 0, 10000, 1));
+        pauseSpinner.setModel(pauseModel(0));
         pauseSpinner.setMinimumSize(new java.awt.Dimension(100, 20));
         pauseSpinner.setPreferredSize(new java.awt.Dimension(100, 20));
         pauseSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1886,17 +1899,132 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         setLocationRelativeTo(null);
     } // </editor-fold>//GEN-END:initComponents
 
+    /**
+     * The scaled icon for a texture at a pixel size, created once and handed back identically
+     * every time. Public as a seam: the frame itself is never constructed in a test, so this is
+     * the part a headless test can pin.
+     */
+    public static ImageIcon getCachedIcon(
+            final Image sourceImage,
+            final int iconSize) {
+        java.util.HashMap<Integer, ImageIcon> scaledTo = iconCache.get(sourceImage);
+        if (scaledTo == null) {
+            scaledTo = new java.util.HashMap<Integer, ImageIcon>();
+            iconCache.put(sourceImage, scaledTo);
+        }
+        ImageIcon icon = scaledTo.get(iconSize);
+        if (icon == null) {
+            if (iconCacheEntries >= ICON_CACHE_LIMIT) {
+                // Drop the whole cache rather than age out entries one by one: a resize drag
+                // invents a new pixel size per event, and those are the entries nobody will reuse.
+                iconCache.clear();
+                iconCacheEntries = 0;
+                scaledTo = iconCache.get(sourceImage);
+                if (scaledTo == null) {
+                    scaledTo = new java.util.HashMap<Integer, ImageIcon>();
+                    iconCache.put(sourceImage, scaledTo);
+                }
+            }
+            icon = new ImageIcon(sourceImage.getScaledInstance(iconSize, iconSize, Image.SCALE_FAST));
+            scaledTo.put(iconSize, icon);
+            iconCacheEntries++;
+        }
+        return icon;
+    }
+
+    /**
+     * Sets a button's icon from a component's texture, reusing a cached scaled image when one
+     * exists and doing nothing at all when the button already holds that exact instance. This is
+     * the whole point of the call: a layout pass that leaves the size alone must not re-scale.
+     */
+    public static void setComponentIcon(
+            final javax.swing.AbstractButton button,
+            final Image sourceImage,
+            final int buttonSize) {
+        if (buttonSize > 2 && sourceImage != null) {
+            final ImageIcon icon = getCachedIcon(sourceImage, buttonSize * 8 / 10);
+            if (button.getIcon() != icon) {
+                button.setIcon(icon);
+            }
+        } else {
+            button.setIcon(null);
+        }
+    }
+
+    /**
+     * P3-12 follow-up seam: the spinner model behind both automation-threshold spinners. The bound
+     * is the code format's, not {@code Reactor.MAX_COMPONENT_HEAT}: a rev-4 code legitimately
+     * carries a threshold up to {@link Reactor.MAX_AUTOMATION_THRESHOLD}, and the spinner used to
+     * declare a maximum nearly a thousand times smaller. Measured on the JDK's own {@code JSpinner},
+     * {@code setValue} handed an out-of-range value neither throws nor clamps — it stores it — so
+     * the old model was not a crash risk, it was a declaration that no longer described what the
+     * spinner can hold, which is what makes its step semantics wrong for legitimate codes. Static
+     * so a headless test can reach it, like {@link clampedFrameSize}.
+     */
+    public static javax.swing.SpinnerNumberModel automationThresholdModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_AUTOMATION_THRESHOLD, 1);
+    }
+
+    /**
+     * The spinner models for the remaining fields the code format bounds, each built from the
+     * constant the writer and the reader use. They were spelled as bare literals here —
+     * {@code 5000000}, {@code 120000}, {@code 10000} — and that is how the threshold spinner came
+     * to declare a maximum nearly a thousand times smaller than the format's (P3-12): a control
+     * whose range does not match the field's bound either refuses a value the format can carry,
+     * or offers one it cannot write back. Naming the bound once makes that drift impossible
+     * rather than merely once-found; the factories are static for the same reason as
+     * {@link automationThresholdModel}, since the frame itself cannot be constructed headlessly.
+     */
+    public static javax.swing.SpinnerNumberModel pulseDurationModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_PULSE_DURATION, 1);
+    }
+
+    /** The suspend/resume temperature spinners, bounded by the code's temperature field. */
+    public static javax.swing.SpinnerNumberModel temperatureModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.CODE_TEMP_BOUND, 1);
+    }
+
+    /** The simulation tick limit spinner, bounded by the code's tick field. */
+    public static javax.swing.SpinnerNumberModel tickLimitModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_SIMULATION_TICKS, 1);
+    }
+
+    /** The reactor pause spinners, bounded by the code's pause field. */
+    public static javax.swing.SpinnerNumberModel pauseModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_REACTOR_PAUSE, 1);
+    }
+
+    /**
+     * P3-7 seam: the size to ask the frame for, or null when it already honours its minimum and
+     * therefore needs no resize request at all. Static because a JFrame cannot be constructed in a
+     * headless JVM at all — {@code java.awt.HeadlessException} out of {@code java.awt.Window.<init>} —
+     * so this clamp and the decision to resize are the only part of {@link plannerResized} a test
+     * can reach.
+     */
+    public static java.awt.Dimension clampedFrameSize(
+            final java.awt.Dimension current,
+            final java.awt.Dimension minimum) {
+        final int width = Math.max(current.width, minimum.width);
+        final int height = Math.max(current.height, minimum.height);
+        if (width == current.width && height == current.height) {
+            return null;
+        }
+        return new java.awt.Dimension(width, height);
+    }
+
     private void plannerResized(java.awt.event.ComponentEvent evt) { // GEN-FIRST:event_plannerResized
-        // Force minimum dimensions to be honored, since Swing apparently doesn't handle that automatically.
-        Dimension dim = this.getSize();
-        Dimension minDim = this.getMinimumSize();
-        if (dim.width < minDim.width) {
-            dim.width = minDim.width;
+        // Force minimum dimensions to be honored, since Swing apparently doesn't handle that
+        // automatically. P3-7: asking for a size from inside this frame's own resize handler asks
+        // Swing for another resize, which re-fires this handler -- the feedback loop behind the
+        // flicker. Only ask when the clamp below actually moves something; a frame that already
+        // honours its minimum gets no resize request at all. The icon pass below stays unguarded:
+        // reactorPanelComponentResized and componentsPanelComponentResized call this method when a
+        // *panel* resized and the frame did not, and that is exactly when the icons have to be
+        // rescaled.
+        java.awt.Dimension resizeRequest = clampedFrameSize(this.getSize(), this.getMinimumSize());
+        if (resizeRequest != null) {
+            setSize(resizeRequest);
         }
-        if (dim.height < minDim.height) {
-            dim.height = minDim.height;
-        }
-        setSize(dim);
         Enumeration<AbstractButton> elements = componentsGroup.getElements();
         while (elements.hasMoreElements()) {
             AbstractButton button = elements.nextElement();
@@ -1904,8 +2032,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             if (buttonSize > 2) {
                 final ReactorItem component = ComponentFactory.getDefaultComponent(button.getActionCommand());
                 if (component != null && component.image != null) {
-                    button.setIcon(new ImageIcon(component.image.getScaledInstance(
-                            buttonSize * 8 / 10, buttonSize * 8 / 10, Image.SCALE_FAST)));
+                    setComponentIcon(button, component.image, buttonSize);
                 } else {
                     button.setIcon(null);
                 }
@@ -1917,8 +2044,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
                 if (buttonSize > 2) {
                     final ReactorItem component = reactor.getComponentAt(row, col);
                     if (component != null && component.image != null) {
-                        reactorButtons[row][col].setIcon(new ImageIcon(component.image.getScaledInstance(
-                                buttonSize * 8 / 10, buttonSize * 8 / 10, Image.SCALE_FAST)));
+                        setComponentIcon(reactorButtons[row][col], component.image, buttonSize);
                     } else {
                         reactorButtons[row][col].setIcon(null);
                     }
@@ -2362,7 +2488,6 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             MaterialsList.setGTVersion("5.08");
             FuelRod.setGT509Behavior(false);
             FuelRod.setGTNHBehavior(false);
-            GGFuelRod.setGTNHBehavior(false);
         } else if ("5.09".equals(gtVersion)) {
             iridiumNeutronReflectorButton.setEnabled(true);
             fuelRodThoriumButton.setEnabled(true);
@@ -2419,7 +2544,6 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             MaterialsList.setGTVersion("5.09");
             FuelRod.setGT509Behavior(true);
             FuelRod.setGTNHBehavior(false);
-            GGFuelRod.setGTNHBehavior(false);
         } else if ("GTNH".equals(gtVersion)) {
             iridiumNeutronReflectorButton.setEnabled(true);
             fuelRodThoriumButton.setEnabled(true);
@@ -2476,7 +2600,6 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             MaterialsList.setGTVersion("GTNH");
             FuelRod.setGT509Behavior(false);
             FuelRod.setGTNHBehavior(true);
-            GGFuelRod.setGTNHBehavior(true);
         } else {
             iridiumNeutronReflectorButton.setEnabled(!"1.7.10".equals(mcVersion));
             fuelRodThoriumButton.setEnabled(false);
@@ -2533,7 +2656,6 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
             MaterialsList.setGTVersion("none");
             FuelRod.setGT509Behavior(false);
             FuelRod.setGTNHBehavior(false);
-            GGFuelRod.setGTNHBehavior(false);
         }
         materialsArea.setText(reactor.getMaterials().toString());
         refreshAllComponentTooltips();
@@ -2549,8 +2671,8 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
                 int buttonSize = Math.min(
                         reactorButtons[finalRow][finalCol].getWidth(), reactorButtons[finalRow][finalCol].getHeight());
                 if (buttonSize > 2 && componentToPlace != null && componentToPlace.image != null) {
-                    reactorButtons[finalRow][finalCol].setIcon(new ImageIcon(componentToPlace.image.getScaledInstance(
-                            buttonSize * 8 / 10, buttonSize * 8 / 10, Image.SCALE_FAST)));
+                    setComponentIcon(
+                            reactorButtons[finalRow][finalCol], componentToPlace.image, buttonSize);
                     reactorButtons[finalRow][finalCol].setToolTipText(componentToPlace.toString());
                     reactorButtons[finalRow][finalCol].setBackground(Color.LIGHT_GRAY);
                 } else {

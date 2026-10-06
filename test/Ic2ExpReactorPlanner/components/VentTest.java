@@ -363,18 +363,21 @@ class VentTest {
     }
 
     /**
-     * {@code Vent.getVentCoolingCapacity()} reads {@code parent} without a null check whenever
-     * {@code sideVent > 0}. Only {@code componentHeatVent} has a non-zero sideVent, so an
-     * <i>unplaced</i> componentHeatVent throws on {@code producesOutput()} /
-     * {@code getVentCoolingCapacity()}. The GUI currently only asks placed components, so this is
-     * latent rather than live, but it is a trap for any refactor that queries a prototype.
+     * P3-13: {@code Vent.getVentCoolingCapacity()} used to dereference {@code parent} whenever
+     * {@code sideVent > 0}, so an <i>unplaced</i> componentHeatVent (the only vent with a
+     * non-zero sideVent) threw from {@code producesOutput()} as well, because that method calls
+     * the capacity. An unplaced vent has no neighbours to cool, so its side-vent contribution is
+     * 0 and the capacity is just {@code selfVent}. {@code dissipate()} deliberately still
+     * dereferences {@code parent}: that is an action on the reactor, not a query, and it has no
+     * meaning outside one.
      */
     @Test
-    @DisplayName("an unplaced componentHeatVent throws on getVentCoolingCapacity (parent is null)")
-    void unplacedSideVentThrowsOnVentCoolingCapacity() {
+    @DisplayName("an unplaced side-venting vent is queryable but not runnable")
+    void unplacedSideVentIsQueryable() {
         Vent unplaced = vent("componentHeatVent");
-        assertThrows(NullPointerException.class, unplaced::getVentCoolingCapacity);
-        assertThrows(NullPointerException.class, unplaced::producesOutput);
+        assertClose(0, unplaced.getVentCoolingCapacity(), 1e-9, "no neighbours, so no side venting");
+        assertFalse(unplaced.producesOutput(), "and it produces nothing while unplaced");
+        assertThrows(NullPointerException.class, unplaced::dissipate, "but running it still needs a reactor");
     }
 
     /** Vents with sideVent 0 never touch {@code parent}, so they are safe to query unplaced. */

@@ -87,9 +87,20 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
 
     private final MaterialsList replacedItems = new MaterialsList();
 
+    // P2-2: the grid is stable for the whole run - handleAutomation "replaces" a component by
+    // clearing it in place, and a broken one stays in its cell - so the per-tick 6x9 iterations
+    // can walk a flat list built once instead of the bounds-checked Reactor.getComponentAt.
+    private ReactorItem[] tickComponents = new ReactorItem[0];
+
+    // The cell each snapshot entry sits in, as row * 9 + col, for the loops that report a position.
+    private int[] tickCell = new int[0];
+
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat(getI18n("Simulation.DecimalFormat"));
 
-    private boolean completed = false;
+    // Written on the SwingWorker thread in doInBackground and read on the EDT via getData()
+    // from arbitrary UI events, so it needs volatile: without it there is no happens-before edge
+    // between the two paths and the comparison feature can permanently observe null.
+    private volatile boolean completed = false;
 
     private final SimulationData data = new SimulationData();
 
@@ -168,6 +179,7 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             reachedHurt = initialHeat >= 0.7 * reactor.getMaxHeat();
             reachedLava = initialHeat >= 0.85 * reactor.getMaxHeat();
             reachedExplode = false;
+            snapshotGrid();
             for (int row = 0; row < 6; row++) {
                 for (int col = 0; col < 9; col++) {
                     ReactorItem component = reactor.getComponentAt(row, col);
@@ -188,35 +200,35 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             allFuelRodsDepleted = false;
             componentsIntact = true;
             anyRodsDepleted = false;
+            // P2-3(b): the bundle lookups are constant for the whole run, so resolve them once
+            // rather than six times per CSV row.
+            final String csvTickFormat = getI18n("CSVData.EntryReactorTick");
+            final String csvCoreHeatFormat = getI18n("CSVData.EntryCoreHeat");
+            final String csvHUOutputFormat = getI18n("CSVData.EntryHUOutput");
+            final String csvEUOutputFormat = getI18n("CSVData.EntryEUOutput");
+            final String csvComponentValueFormat = getI18n("CSVData.EntryComponentValue");
+            final String csvComponentOutputFormat = getI18n("CSVData.EntryComponentOutput");
             do {
                 reactorTicks++;
                 reactor.clearEUOutput();
                 reactor.clearVentedHeat();
-                for (int row = 0; row < 6; row++) {
-                    for (int col = 0; col < 9; col++) {
-                        ReactorItem component = reactor.getComponentAt(row, col);
-                        if (component != null) {
-                            component.preReactorTick();
-                        }
-                    }
+                for (final ReactorItem component : tickComponents) {
+                    component.preReactorTick();
                 }
                 if (active) {
                     allFuelRodsDepleted = true; // assume rods depleted until one is found that isn't.
                 }
                 double generatedHeat = 0.0;
-                for (int row = 0; row < 6; row++) {
-                    for (int col = 0; col < 9; col++) {
-                        ReactorItem component = reactor.getComponentAt(row, col);
-                        if (component != null && !component.isBroken()) {
-                            if (allFuelRodsDepleted && component.getRodCount() > 0) {
-                                allFuelRodsDepleted = false;
-                            }
-                            if (active) {
-                                generatedHeat += component.generateHeat();
-                            }
-                            component.dissipate();
-                            component.transfer();
+                for (final ReactorItem component : tickComponents) {
+                    if (!component.isBroken()) {
+                        if (allFuelRodsDepleted && component.getRodCount() > 0) {
+                            allFuelRodsDepleted = false;
                         }
+                        if (active) {
+                            generatedHeat += component.generateHeat();
+                        }
+                        component.dissipate();
+                        component.transfer();
                     }
                 }
                 maxReactorHeat = Math.max(reactor.getCurrentHeat(), maxReactorHeat);
@@ -224,12 +236,9 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                 checkReactorTemperature(reactorTicks);
                 maxGeneratedHeat = Math.max(generatedHeat, maxGeneratedHeat);
                 if (active) {
-                    for (int row = 0; row < 6; row++) {
-                        for (int col = 0; col < 9; col++) {
-                            ReactorItem component = reactor.getComponentAt(row, col);
-                            if (component != null && !component.isBroken()) {
-                                component.generateEnergy();
-                            }
+                    for (final ReactorItem component : tickComponents) {
+                        if (!component.isBroken()) {
+                            component.generateEnergy();
                         }
                     }
                 }
@@ -273,26 +282,23 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                 calculateHeatingCooling(reactorTicks);
                 handleAutomation(reactorTicks);
                 if (csvOut != null && reactorTicks <= csvLimit) {
-                    csvOut.printf(getI18n("CSVData.EntryReactorTick"), reactorTicks);
-                    csvOut.printf(getI18n("CSVData.EntryCoreHeat"), reactor.getCurrentHeat());
+                    csvOut.printf(csvTickFormat, reactorTicks);
+                    csvOut.printf(csvCoreHeatFormat, reactor.getCurrentHeat());
                     if (reactor.isFluid()) {
-                        csvOut.printf(getI18n("CSVData.EntryHUOutput"), reactor.getVentedHeat() * 40);
+                        csvOut.printf(csvHUOutputFormat, reactor.getVentedHeat() * 40);
                     } else {
-                        csvOut.printf(getI18n("CSVData.EntryEUOutput"), reactor.getCurrentEUoutput());
+                        csvOut.printf(csvEUOutputFormat, reactor.getCurrentEUoutput());
                     }
-                    for (int row = 0; row < 6; row++) {
-                        for (int col = 0; col < 9; col++) {
-                            ReactorItem component = reactor.getComponentAt(row, col);
-                            if (component != null && (component.getMaxHeat() > 1 || component.getMaxDamage() > 1)) {
-                                double componentValue = component.getCurrentDamage();
-                                if (component.getMaxHeat() > 1) {
-                                    componentValue = component.getCurrentHeat();
-                                }
-                                csvOut.printf(getI18n("CSVData.EntryComponentValue"), componentValue);
+                    for (final ReactorItem component : tickComponents) {
+                        if (component.getMaxHeat() > 1 || component.getMaxDamage() > 1) {
+                            double componentValue = component.getCurrentDamage();
+                            if (component.getMaxHeat() > 1) {
+                                componentValue = component.getCurrentHeat();
                             }
-                            if (component != null && component.producesOutput()) {
-                                csvOut.printf(getI18n("CSVData.EntryComponentOutput"), component.getCurrentOutput());
-                            }
+                            csvOut.printf(csvComponentValueFormat, componentValue);
+                        }
+                        if (component.producesOutput()) {
+                            csvOut.printf(csvComponentOutputFormat, component.getCurrentOutput());
                         }
                     }
                     csvOut.println();
@@ -308,6 +314,11 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             }
             if (isCancelled()) {
                 publish(formatI18n("Simulation.CancelledAtTick", reactorTicks));
+                // A cancelled run is still a finished run. The GUI waits on the "completed" property
+                // change and then reads getData(), so both must happen on this exit path too; skipping
+                // them leaves the simulator in a state where the comparison view never updates.
+                completed = true;
+                firePropertyChange("completed", null, true);
                 return null;
             }
             data.minTemp = minReactorHeat;
@@ -338,50 +349,9 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                     publish(formatI18n("Simulation.ComponentsReplaced", replacedItemsString));
                 }
 
-                if (reactorTicks > 0) {
-                    data.totalReactorTicks = reactorTicks;
-                    if (reactor.isFluid()) {
-                        data.totalHUoutput = 40 * totalHeatOutput;
-                        data.avgHUoutput = 2 * totalHeatOutput / reactorTicks;
-                        data.minHUoutput = 2 * minHeatOutput;
-                        data.maxHUoutput = 2 * maxHeatOutput;
-                        if (totalHeatOutput > 0) {
-                            publish(formatI18n(
-                                    "Simulation.HeatOutputs",
-                                    DECIMAL_FORMAT.format(40 * totalHeatOutput),
-                                    DECIMAL_FORMAT.format(2 * totalHeatOutput / reactorTicks),
-                                    DECIMAL_FORMAT.format(2 * minHeatOutput),
-                                    DECIMAL_FORMAT.format(2 * maxHeatOutput)));
-                            if (totalRodCount > 0) {
-                                publish(formatI18n(
-                                        "Simulation.Efficiency",
-                                        totalHeatOutput / reactorTicks / 4 / totalRodCount,
-                                        minHeatOutput / 4 / totalRodCount,
-                                        maxHeatOutput / 4 / totalRodCount));
-                            }
-                        }
-                    } else {
-                        data.totalEUoutput = totalEUoutput;
-                        data.avgEUoutput = totalEUoutput / (reactorTicks * 20);
-                        data.minEUoutput = minEUoutput / 20.0;
-                        data.maxEUoutput = maxEUoutput / 20.0;
-                        if (totalEUoutput > 0) {
-                            publish(formatI18n(
-                                    "Simulation.EUOutputs",
-                                    DECIMAL_FORMAT.format(totalEUoutput),
-                                    DECIMAL_FORMAT.format(totalEUoutput / (reactorTicks * 20)),
-                                    DECIMAL_FORMAT.format(minEUoutput / 20.0),
-                                    DECIMAL_FORMAT.format(maxEUoutput / 20.0)));
-                            if (totalRodCount > 0) {
-                                publish(formatI18n(
-                                        "Simulation.Efficiency",
-                                        totalEUoutput / reactorTicks / 100 / totalRodCount,
-                                        minEUoutput / 100 / totalRodCount,
-                                        maxEUoutput / 100 / totalRodCount));
-                            }
-                        }
-                    }
-                }
+                reportOutputTotals(
+                        reactorTicks, totalRodCount, totalHeatOutput, minHeatOutput,
+                        maxHeatOutput, totalEUoutput, minEUoutput, maxEUoutput, false);
 
                 if (reactor.getCurrentHeat() > 0.0) {
                     publish(formatI18n("Simulation.ReactorRemainingHeat", reactor.getCurrentHeat()));
@@ -397,6 +367,7 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                                 publish(String.format("R%dC%d:0xFFA500", row, col)); // NOI18N
                                 component.info.append(
                                         formatI18n("ComponentInfo.RemainingHeat", component.getCurrentHeat()));
+                                needsCooldown[row][col] = true;
                             }
                         }
                     }
@@ -413,32 +384,33 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                             reactorCooldownTime = cooldownTicks;
                         }
                         prevTotalComponentHeat = currentTotalComponentHeat;
-                        for (int row = 0; row < 6; row++) {
-                            for (int col = 0; col < 9; col++) {
-                                ReactorItem component = reactor.getComponentAt(row, col);
-                                if (component != null && !component.isBroken()) {
-                                    component.dissipate();
-                                    component.transfer();
-                                }
+                        for (final ReactorItem component : tickComponents) {
+                            if (!component.isBroken()) {
+                                component.dissipate();
+                                component.transfer();
                             }
                         }
                         lastHeatOutput = reactor.getVentedHeat();
                         totalHeatOutput += lastHeatOutput;
-                        minEUoutput = Math.min(lastEUoutput, minEUoutput);
-                        maxEUoutput = Math.max(lastEUoutput, maxEUoutput);
+                        // P3-2: there is deliberately no EU min/max in this loop. A cooldown tick
+                        // runs only dissipate()/transfer(); generateEnergy() is the only caller of
+                        // addEUOutput and it lives in the main tick loop, so a cooldown tick produces
+                        // no energy. The old pair folded a stale lastEUoutput, which was idempotent
+                        // (the main loop had already folded that same value) but copy-paste from the
+                        // wrong loop. The heat pair below is genuine: clearVentedHeat() precedes the
+                        // dissipate()/transfer() pass, so getVentedHeat() is a fresh figure per tick.
                         minHeatOutput = Math.min(lastHeatOutput, minHeatOutput);
                         maxHeatOutput = Math.max(lastHeatOutput, maxHeatOutput);
                         cooldownTicks++;
                         currentTotalComponentHeat = 0.0;
-                        for (int row = 0; row < 6; row++) {
-                            for (int col = 0; col < 9; col++) {
-                                ReactorItem component = reactor.getComponentAt(row, col);
-                                if (component != null && !component.isBroken()) {
-                                    currentTotalComponentHeat += component.getCurrentHeat();
-                                    if (component.getCurrentHeat() == 0.0 && needsCooldown[row][col]) {
-                                        component.info.append(formatI18n("ComponentInfo.CooldownTime", cooldownTicks));
-                                        needsCooldown[row][col] = false;
-                                    }
+                        for (int i = 0; i < tickComponents.length; i++) {
+                            ReactorItem component = tickComponents[i];
+                            if (!component.isBroken()) {
+                                currentTotalComponentHeat += component.getCurrentHeat();
+                                final int cell = tickCell[i];
+                                if (component.getCurrentHeat() == 0.0 && needsCooldown[cell / 9][cell % 9]) {
+                                    component.info.append(formatI18n("ComponentInfo.CooldownTime", cooldownTicks));
+                                    needsCooldown[cell / 9][cell % 9] = false;
                                 }
                             }
                         }
@@ -468,6 +440,9 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
                 }
                 explosionPower *= explosionPowerMult;
                 publish(formatI18n("Simulation.ExplosionPower", explosionPower));
+                reportOutputTotals(
+                        reactorTicks, totalRodCount, totalHeatOutput, minHeatOutput,
+                        maxHeatOutput, totalEUoutput, minEUoutput, maxEUoutput, true);
             }
             double totalEffectiveVentCooling = 0.0;
             double totalVentCoolingCapacity = 0.0;
@@ -551,7 +526,12 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             //                publish(formatI18n("Simulation.ExcessHeating", maxGeneratedHeat - totalCooling));
             //            }
             // return null;
-        } catch (Throwable e) {
+        } catch (Exception e) {
+            // P3-4: narrowed from Throwable. A JVM Error (OutOfMemoryError, StackOverflowError)
+            // is not a simulation failure the user can act on, and dumping its stack trace into
+            // the report area read as a plausible result. Errors go to the clause below instead,
+            // which says that the run stopped without printing the trace, and then rethrows so
+            // SwingWorker's FutureTask still captures it.
             if (cooldownTicks == 0) {
                 publish(formatI18n("Simulation.ErrorReactor", reactorTicks));
             } else {
@@ -561,12 +541,131 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             if (csvOut != null) {
                 csvOut.close();
             }
+        } catch (Throwable e) {
+            // P3-4's residual, now closed: the narrowing above leaves an Error to be captured by
+            // SwingWorker's FutureTask, and ReactorPlannerFrame drives the worker with execute()
+            // plus a property listener and never calls get(), so the report simply stopped mid-run
+            // and read as a complete result. Say that it stopped, and where; keep the stack trace
+            // out of the report, since the trace is what made the old Throwable catch plausible.
+            // Rethrow so the FutureTask still captures it and a caller that does call get() still
+            // sees it as java.util.concurrent.ExecutionException.
+            if (cooldownTicks == 0) {
+                publish(formatI18n("Simulation.ErrorReactor", reactorTicks));
+            } else {
+                publish(formatI18n("Simulation.ErrorCooldown", cooldownTicks));
+            }
+            publish(abortedReport(e));
+            if (csvOut != null) {
+                csvOut.close();
+            }
+            throw e;
         }
         long endTime = System.nanoTime();
         publish(formatI18n("Simulation.ElapsedTime", (endTime - startTime) / 1e9));
         completed = true;
         firePropertyChange("completed", null, true);
         return null;
+    }
+
+    /**
+     * P3-19: the output totals used to be written only on the "did not explode" path, so an
+     * exploding design reported zero EU, zero ticks and zero efficiency while its time-to-explode,
+     * max temperature and explosion power were all populated — the comparison view read that as
+     * "produces nothing" rather than "produced this much, then melted". The ticks before the
+     * explosion did produce output, and the class already summarises partial output for a broken
+     * or depleted component, so an exploding run gets the same treatment, under a "before the
+     * reactor overheated" heading.
+     *
+     * minEUoutput and minHeatOutput stay at their Double.MAX_VALUE defaults until the first tick
+     * below max heat, so a reactor that overheats on the very first tick has no normal tick to
+     * summarise: it keeps the zero defaults rather than reporting Double.MAX_VALUE as a minimum.
+     */
+    private void reportOutputTotals(
+            final int reactorTicks,
+            final int totalRodCount,
+            final double totalHeatOutput,
+            final double minHeatOutput,
+            final double maxHeatOutput,
+            final double totalEUoutput,
+            final double minEUoutput,
+            final double maxEUoutput,
+            final boolean overheated) {
+        if (reactorTicks <= 0 || minEUoutput >= Double.MAX_VALUE) {
+            return;
+        }
+        data.totalReactorTicks = reactorTicks;
+        if (reactor.isFluid()) {
+            data.totalHUoutput = 40 * totalHeatOutput;
+            data.avgHUoutput = 2 * totalHeatOutput / reactorTicks;
+            data.minHUoutput = 2 * minHeatOutput;
+            data.maxHUoutput = 2 * maxHeatOutput;
+            if (totalHeatOutput > 0) {
+                publish(formatI18n(
+                        overheated ? "Simulation.HeatOutputsBeforeOverheated" : "Simulation.HeatOutputs",
+                        DECIMAL_FORMAT.format(40 * totalHeatOutput),
+                        DECIMAL_FORMAT.format(2 * totalHeatOutput / reactorTicks),
+                        DECIMAL_FORMAT.format(2 * minHeatOutput),
+                        DECIMAL_FORMAT.format(2 * maxHeatOutput)));
+                if (totalRodCount > 0) {
+                    publish(formatI18n(
+                            "Simulation.Efficiency",
+                            totalHeatOutput / reactorTicks / 4 / totalRodCount,
+                            minHeatOutput / 4 / totalRodCount,
+                            maxHeatOutput / 4 / totalRodCount));
+                }
+            }
+        } else {
+            data.totalEUoutput = totalEUoutput;
+            data.avgEUoutput = totalEUoutput / (reactorTicks * 20);
+            data.minEUoutput = minEUoutput / 20.0;
+            data.maxEUoutput = maxEUoutput / 20.0;
+            if (totalEUoutput > 0) {
+                publish(formatI18n(
+                        overheated ? "Simulation.EUOutputsBeforeOverheated" : "Simulation.EUOutputs",
+                        DECIMAL_FORMAT.format(totalEUoutput),
+                        DECIMAL_FORMAT.format(totalEUoutput / (reactorTicks * 20)),
+                        DECIMAL_FORMAT.format(minEUoutput / 20.0),
+                        DECIMAL_FORMAT.format(maxEUoutput / 20.0)));
+                if (totalRodCount > 0) {
+                    publish(formatI18n(
+                            "Simulation.Efficiency",
+                            totalEUoutput / reactorTicks / 100 / totalRodCount,
+                            minEUoutput / 100 / totalRodCount,
+                            maxEUoutput / 100 / totalRodCount));
+                }
+            }
+        }
+    }
+
+    /**
+     * Snapshots the non-null grid components in row-major order, once per run. The grid is never
+     * mutated during a run, so this cannot go stale; the ordering is what the CSV columns and the
+     * "R%dC%d" colour codes depend on, and it is preserved exactly.
+     */
+    private void snapshotGrid() {
+        int count = 0;
+        for (int row = 0; row < 6; row++) {
+            for (int col = 0; col < 9; col++) {
+                if (reactor.getComponentAt(row, col) != null) {
+                    count++;
+                }
+            }
+        }
+        ReactorItem[] components = new ReactorItem[count];
+        int[] cells = new int[count];
+        int at = 0;
+        for (int row = 0; row < 6; row++) {
+            for (int col = 0; col < 9; col++) {
+                ReactorItem component = reactor.getComponentAt(row, col);
+                if (component != null) {
+                    components[at] = component;
+                    cells[at] = row * 9 + col;
+                    at++;
+                }
+            }
+        }
+        tickComponents = components;
+        tickCell = cells;
     }
 
     private void handleBrokenComponents(
@@ -576,10 +675,12 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
             final double totalEUoutput,
             final double minReactorHeat,
             final double maxReactorHeat) {
-        for (int row = 0; row < 6; row++) {
-            for (int col = 0; col < 9; col++) {
-                ReactorItem component = reactor.getComponentAt(row, col);
-                if (component != null && component.isBroken() && !alreadyBroken[row][col]) {
+        for (int i = 0; i < tickComponents.length; i++) {
+            ReactorItem component = tickComponents[i];
+            final int row = tickCell[i] / 9;
+            final int col = tickCell[i] % 9;
+            if (component != null) {
+                if (component.isBroken() && !alreadyBroken[row][col]) {
                     alreadyBroken[row][col] = true;
                     if (component.getRodCount() == 0) {
                         publish(String.format("R%dC%d:0xFF0000", row, col)); // NOI18N
@@ -691,10 +792,12 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
     }
 
     private void handleAutomation(final int reactorTicks) {
-        for (int row = 0; row < 6; row++) {
-            for (int col = 0; col < 9; col++) {
-                ReactorItem component = reactor.getComponentAt(row, col);
-                if (component != null && reactor.isAutomated()) {
+        for (int i = 0; i < tickComponents.length; i++) {
+            ReactorItem component = tickComponents[i];
+            final int row = tickCell[i] / 9;
+            final int col = tickCell[i] % 9;
+            if (component != null) {
+                if (reactor.isAutomated()) {
                     if (component.getMaxHeat() > 1) {
                         if (component.getAutomationThreshold() > component.getInitialHeat()
                                 && component.getCurrentHeat() >= component.getAutomationThreshold()) {
@@ -783,16 +886,11 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
 
     private void calculateHeatingCooling(final int reactorTicks) {
         if (reactorTicks > 20) {
-            for (int row = 0; row < 6; row++) {
-                for (int col = 0; col < 9; col++) {
-                    ReactorItem component = reactor.getComponentAt(row, col);
-                    if (component != null) {
-                        totalHullHeating += component.getCurrentHullHeating();
-                        totalComponentHeating += component.getCurrentComponentHeating();
-                        totalHullCooling += component.getCurrentHullCooling();
-                        totalVentCooling += component.getCurrentVentCooling();
-                    }
-                }
+            for (final ReactorItem component : tickComponents) {
+                totalHullHeating += component.getCurrentHullHeating();
+                totalComponentHeating += component.getCurrentComponentHeating();
+                totalHullCooling += component.getCurrentHullCooling();
+                totalVentCooling += component.getCurrentVentCooling();
             }
         }
     }
@@ -840,13 +938,50 @@ public class AutomationSimulator extends SwingWorker<Void, String> {
         }
     }
 
+    /**
+     * What a run aborted by a JVM `Error` says about it. Extracted static so a test can pin the
+     * shape: nothing in the suite or the 304-design corpus throws inside `doInBackground`, so the
+     * catch itself has no seam (see CODE_REVIEW.md). Deliberately the error itself and not its
+     * stack trace — the trace in the report area is what made the old `catch (Throwable)` read as
+     * a plausible result.
+     */
+    public static String abortedReport(final Throwable error) {
+        return formatI18n("Simulation.AbortedByError", error);
+    }
+
+    // P2-3(a): String.matches recompiles the pattern on every call, and process() runs on the EDT
+    // once per accumulated publish batch. The Javasharp dialect has no Pattern class to precompile
+    // into, so the test is written out. It is exactly matches("R\\dC\\d:.*") for this regex engine -
+    // whose dot stops at \n, \r, \u0085, \u2028 and \u2029 but *not* at the vertical tab or form feed
+    // that the JDK's engine also excludes. AutomationSimulatorTest pins the two against each other.
+    public static boolean isReactorCellChunk(final String chunk) {
+        if (chunk.length() < 5
+                || chunk.charAt(0) != 'R'
+                || chunk.charAt(2) != 'C'
+                || chunk.charAt(4) != ':') {
+            return false;
+        }
+        final char rowChar = chunk.charAt(1);
+        final char colChar = chunk.charAt(3);
+        if (rowChar < '0' || rowChar > '9' || colChar < '0' || colChar > '9') {
+            return false;
+        }
+        for (int i = 5; i < chunk.length(); i++) {
+            final char c = chunk.charAt(i);
+            if (c == '\n' || c == '\r' || c == '\u0085' || c == '\u2028' || c == '\u2029') {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     protected void process(List<String> chunks) {
         for (String chunk : chunks) {
             if (chunk.isEmpty()) {
                 output.setText(""); // NO18N
             } else {
-                if (chunk.matches("R\\dC\\d:.*")) { // NO18N
+                if (isReactorCellChunk(chunk)) { // NO18N
                     String temp = chunk.substring(5);
                     int row = chunk.charAt(1) - '0';
                     int col = chunk.charAt(3) - '0';

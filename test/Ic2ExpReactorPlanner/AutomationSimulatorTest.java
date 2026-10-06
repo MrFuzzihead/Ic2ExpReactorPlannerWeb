@@ -11,8 +11,10 @@ import Ic2ExpReactorPlanner.components.Condensator;
 import Ic2ExpReactorPlanner.components.CoolantCell;
 import Ic2ExpReactorPlanner.components.ReactorItem;
 import java.io.File;
+import java.util.concurrent.ExecutionException;
 import java.util.List;
 import javax.swing.JPanel;
+import javax.swing.SwingWorker;
 import javax.swing.JTextArea;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,10 +29,13 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p><b>One behaviour to know before reading these tests.</b> {@link SimulationData}'s output
  * totals ({@code totalReactorTicks}, {@code totalEUoutput}, {@code avg/min/maxEUoutput},
- * {@code totalHUoutput} and friends) are only written in {@code AutomationSimulator}'s
- * "did not explode" branch. For a design that explodes they are all left at zero, while the
- * per-threshold times ({@code timeToBurn}, {@code timeToXplode}), {@code maxTemp} and the
- * broken/depleted details <i>are</i> populated. {@link #explodingRunsLeaveOutputTotalsAtZero}
+ * {@code totalHUoutput} and friends) describe the ticks that ended below max heat. For a design
+ * that explodes they are written too, as the output produced <i>before</i> the explosion, and the
+ * report says so ("Total output before the reactor overheated"); the exploding tick is excluded
+ * from the min/max pair, and a reactor that starts above max heat has no qualifying tick at all,
+ * so it keeps the zero defaults rather than reporting {@code Double.MAX_VALUE} as a minimum.
+ * The per-threshold times ({@code timeToBurn}, {@code timeToXplode}), {@code maxTemp} and the
+ * broken/depleted details are always populated. {@link #explodingRunsReportOutputUpToTheExplosion}
  * pins that, and the rest of the suite picks the right metric for the question being asked.
  *
  * <p>Assertions are split into:
@@ -247,21 +252,34 @@ class AutomationSimulatorTest {
     class Output {
 
         /**
-         * The behaviour the rest of this class depends on: exploding runs leave the output
-         * totals at their zero defaults, while the threshold times and peak temperature are
-         * still recorded.
+         * P3-19: an exploding run reports the output it produced before the explosion, under a
+         * "before the reactor overheated" heading. bareRod runs 2 500 ticks at 100 EU/tick, so
+         * the total includes the exploding tick (energy is generated before the tick's heat is
+         * checked) while the min/max pair only covers ticks that ended below max heat. A reactor
+         * that starts above max heat has no such tick, so it keeps the zero defaults: writing
+         * the min/max pair there would publish Double.MAX_VALUE as a minimum.
          */
         @Test
-        @DisplayName("exploding runs leave output totals at zero but still record thresholds")
-        void explodingRunsLeaveOutputTotalsAtZero() throws Exception {
-            SimulationData data = TestSupport.simulate(bareRod()).data;
-            assertEquals(0, data.totalReactorTicks, "not set for an exploding run");
-            assertEquals(0.0, data.totalEUoutput, 1e-9, "not set");
-            assertEquals(0.0, data.avgEUoutput, 1e-9, "not set");
-            assertEquals(0.0, data.maxEUoutput, 1e-9, "not set");
-            // ... but these are
-            assertEquals(2500, data.timeToXplode, "recorded");
+        @DisplayName("exploding runs report output up to the explosion, thresholds included")
+        void explodingRunsReportOutputUpToTheExplosion() throws Exception {
+            TestSupport.SimResult run = TestSupport.simulate(bareRod());
+            SimulationData data = run.data;
+            assertEquals(2500, data.totalReactorTicks, "the run length is recorded");
+            assertEquals(2500, data.timeToXplode, "and so is the explosion");
+            assertClose(250000, data.totalEUoutput, 1e-6, "2 500 ticks x 100 EU, the exploding tick included");
+            assertClose(5.0, data.avgEUoutput, 1e-9, "250 000 EU / (2 500 ticks x 20)");
+            assertClose(5.0, data.minEUoutput, 1e-9, "100 EU/tick = 5 EU/t");
+            assertClose(5.0, data.maxEUoutput, 1e-9, "every tick was the same");
             assertClose(10000, data.maxTemp, 1e-6, "recorded");
+            assertTrue(
+                    run.outputText.contains("Total output before the reactor overheated"),
+                    "the report says the totals stop at the explosion");
+
+            Reactor overheated = bareRod();
+            overheated.setCurrentHeat(10001);
+            SimulationData none = TestSupport.simulate(overheated).data;
+            assertEquals(0, none.totalReactorTicks, "no tick ended below max heat, so nothing is summarised");
+            assertClose(0.0, none.totalEUoutput, 1e-9, "and the minimum would otherwise be Double.MAX_VALUE");
         }
 
         @Test
@@ -364,6 +382,40 @@ class AutomationSimulatorTest {
             assertTrue(
                     report.contains(BundleHelper.getI18n("Simulation.ElapsedTime").split("%")[0]),
                     "the run reports its elapsed time: " + report);
+        }
+
+        @Test
+        @DisplayName("a component that still holds heat when the run stops reports its own cooldown time")
+        void componentCooldownTimeIsReported() throws Exception {
+            // The vent keeps 18 of its 1 000 heat when the tick cap stops the run, and the reactor
+            // still has heat for it to drink, so its cooldown phase runs: 3 ticks later it is empty
+            // and it gets the per-component cooldown line. The coolant cells keep 3 024 heat and
+            // never empty, so they must not get that line.
+            Reactor simReactor = new Reactor();
+            place(simReactor, 2, 4, "quadFuelRodUranium");
+            place(simReactor, 1, 4, "coolantCell10k");
+            place(simReactor, 3, 4, "coolantCell10k");
+            place(simReactor, 2, 3, "coolantCell10k");
+            place(simReactor, 2, 5, "heatVent");
+            simReactor.setAutomated(true);
+            simReactor.setMaxSimulationTicks(200_001);
+            JTextArea output = new JTextArea(5, 20);
+            AutomationSimulator simulator =
+                    new AutomationSimulator(simReactor, output, newJPanelGrid(), null, -1);
+            simulator.execute();
+            simulator.get();
+
+            String remainingHeat = BundleHelper.getI18n("ComponentInfo.RemainingHeat").split("%")[0];
+            String cooldownTime = BundleHelper.getI18n("ComponentInfo.CooldownTime").split("%")[0];
+            String vent = simReactor.getComponentAt(2, 5).info.toString();
+            assertTrue(vent.contains(remainingHeat), "the vent is told it held heat: " + vent);
+            assertTrue(vent.contains(BundleHelper.formatI18n("ComponentInfo.CooldownTime", 3)),
+                    "and how long that heat took to clear: " + vent);
+
+            String cell = simReactor.getComponentAt(1, 4).info.toString();
+            assertTrue(cell.contains(remainingHeat), "the cell is told it held heat: " + cell);
+            assertFalse(cell.contains(cooldownTime),
+                    "a cell whose heat never cleared reports no cooldown time: " + cell);
         }
     }
 
@@ -789,6 +841,115 @@ class AutomationSimulatorTest {
             });
             simulator.execute();
             assertTrue(latch.await(60, java.util.concurrent.TimeUnit.SECONDS), "completed was fired");
+        }
+
+        @Test
+        @DisplayName("a cancelled run still completes and exposes its data")
+        void cancelledRunStillCompletes() throws Exception {
+            final java.util.concurrent.CountDownLatch finished = new java.util.concurrent.CountDownLatch(1);
+            Reactor simReactor = quadRodWithCells();
+            simReactor.setAutomated(true);
+            // Automation keeps replacing the spent cells, so this design never boils and the run
+            // goes the whole way to the tick cap. A uranium rod on its own depletes on tick 20 001
+            // and a cesium rod explodes on tick 5 001, both of which finish before the cancel below
+            // is issued - and SwingWorker skips doInBackground outright when it is cancelled before
+            // the job's thread gets going, so the cancel has to arrive mid-run.
+            simReactor.setMaxSimulationTicks(2_000_000);
+            JTextArea output = new JTextArea(5, 20);
+            AutomationSimulator simulator =
+                    new AutomationSimulator(simReactor, output, newJPanelGrid(), null, -1);
+            simulator.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
+                @Override
+                public void propertyChange(java.beans.PropertyChangeEvent evt) {
+                    if ("completed".equals(evt.getPropertyName())) {
+                        finished.countDown();
+                    }
+                }
+            });
+            // SwingWorker skips doInBackground outright when it is cancelled before the job's thread
+            // gets going, so the cancel cannot be issued back-to-back with execute(). Sleeping a
+            // beat puts it squarely inside a two-million-tick run, which is what the GUI does when
+            // it cancels a simulator it knows is still running.
+            simulator.execute();
+            Thread.sleep(200);
+            simulator.cancel(false);
+            assertTrue(finished.await(60, java.util.concurrent.TimeUnit.SECONDS), "completed was fired");
+            String report = output.getText();
+            String marker = BundleHelper.getI18n("Simulation.CancelledAtTick").split("%")[0];
+            assertTrue(report.contains(marker), "the cancel branch ran: " + report);
+            org.junit.jupiter.api.Assertions.assertNotNull(
+                    simulator.getData(), "a cancelled run is a finished run, so getData() is available");
+        }
+    }
+
+    /**
+     * P3-4's residual, now closed. The catch in {@code doInBackground} is narrowed to {@code
+     * Exception}, so a JVM {@code Error} leaves the worker and SwingWorker captures it in its
+     * {@code FutureTask} — and {@code ReactorPlannerFrame} drives the worker with {@code execute()}
+     * plus a property listener and never calls {@code get()}, so the report used to simply stop
+     * mid-run and read as a complete result. {@link abortedReport} is the visible half of the fix,
+     * and the clause that calls it rethrows, which the second test below pins.
+     *
+     * <p><b>What is not pinned here, and cannot be:</b> nothing in the suite or in the 304-design
+     * corpus throws inside {@code doInBackground}, so the catch clause itself has no seam. These
+     * tests pin the shape of the line it publishes and the capture semantics the rethrow relies on,
+     * not the clause.
+     */
+    @Nested
+    @DisplayName("a run aborted by a JVM Error")
+    class AbortedRun {
+
+        @Test
+        @DisplayName("the abort line names the error and carries no stack trace")
+        void abortLineNamesTheErrorAndNoFrame() {
+            String line = AutomationSimulator.abortedReport(new Error("boom"));
+            String marker = BundleHelper.getI18n("Simulation.AbortedByError").split("%")[0];
+            assertTrue(line.contains(marker), "the bundle entry is what shows: " + line);
+            assertTrue(line.contains("java.lang.Error"), "the class is named: " + line);
+            assertTrue(line.contains("boom"), "the message is kept: " + line);
+            assertFalse(line.contains("AutomationSimulator"), "no frame from a trace: " + line);
+            assertFalse(line.contains("doInBackground"), "no frame from a trace: " + line);
+        }
+
+        @Test
+        @DisplayName("an Error thrown under the worker still surfaces at get()")
+        void errorThrownUnderTheWorkerIsCapturedNotLost() throws Exception {
+            SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    throw new Error("worker-boom");
+                }
+            };
+            worker.execute();
+            try {
+                worker.get();
+                assertTrue(false, "get() should have thrown; the Error was swallowed");
+            } catch (ExecutionException ex) {
+                assertTrue(String.valueOf(ex.getMessage()).contains("worker-boom"),
+                        "the Error reached get(): " + ex.getMessage());
+            }
+        }
+    }
+
+    /**
+     * P2-3(a): the Javasharp dialect has no {@code Pattern} class, so the {@code matches("R\\dC\\d:.*")}
+     * test in {@code process()} is replaced by a hand-written predicate. This pins the two against
+     * each other over the awkward cases - wrong length, wrong case, two-digit indices, and the fact
+     * that this engine's {@code .} stops at {@code \n}, {@code \r}, {@code \u0085}, {@code \u2028} and
+     * {@code \u2029} but not at the vertical tab or form feed.
+     */
+    @Test
+    @DisplayName("the reactor-cell chunk test agrees with the pattern it replaced")
+    void reactorCellChunkTestAgreesWithTheRegex() {
+        String[] samples = {
+            "R1C2:0xC0C0C0", "R0C0:0x0", "R9C9:x", "R1C2:", "R1C", "R1C2", "r1C2:0", "R11C2:0",
+            "R1C12:0", "", "R1C2:0\tmore", "R1C2:0\u000B", "R1C2:0\u000C", "R1C2:0\u0085more",
+            "R1C2:0\u2028more", "R1C2:0\u2029more", "R1C2:0xC0C0C0\nmore", "R1C2:0xC0C0C0\rmore",
+            "RaC2:0", "R1Cb:0", "R\u00B9C2:0", "R1C2:\u2028", "R1C2:",
+        };
+        for (String sample : samples) {
+            assertTrue(sample.matches("R\\dC\\d:.*") == AutomationSimulator.isReactorCellChunk(sample),
+                    "the hand-written test must agree with the pattern it replaced for [" + sample + "]");
         }
     }
 

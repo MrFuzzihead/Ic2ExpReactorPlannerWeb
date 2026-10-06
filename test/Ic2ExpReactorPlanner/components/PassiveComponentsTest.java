@@ -62,10 +62,12 @@ class PassiveComponentsTest {
         }
 
         /**
-         * {@code adjustCurrentHeat} reports refusal as a <i>negative</i> return:
-         * {@code result = maxHeat - tempHeat + 1}. Overfilling a 60k cell by 20 000 therefore
-         * returns -9 999, and callers such as {@code FuelRod.handleHeat} read that as "9 999
-         * refused" and push the remainder elsewhere.
+         * {@code adjustCurrentHeat} reports refusal as a <i>negative</i> return, and the amount is
+         * exact: {@code result = maxHeat - tempHeat}, so overfilling a 60k cell by 20 000 returns
+         * -10 000. The old {@code + 1} reported an overflow of N as -(N - 1) (CODE_REVIEW.md P3-15).
+         * Worth noting for anyone tempted to lean on the value: {@code Vent.handleSideVentCooling}
+         * is the only caller that reads it, and it only ever passes a negative adjustment, which
+         * takes the exact underflow branch.
          */
         @Test
         @DisplayName("overfilling reports the refusal as a negative return")
@@ -73,8 +75,8 @@ class PassiveComponentsTest {
             Reactor reactor = new Reactor();
             CoolantCell cell = (CoolantCell) place(reactor, 2, 2, "coolantCell60k");
             assertClose(0, cell.adjustCurrentHeat(50000), 1e-9, "all accepted");
-            // 50 000 + 20 000 = 70 000, so 60 000 - 70 000 + 1 = -9 999 was refused
-            assertClose(-9999, cell.adjustCurrentHeat(20000), 1e-9, "9 999 refused");
+            // 50 000 + 20 000 = 70 000 against a 60 000 capacity, so 60 000 - 70 000 = -10 000 refused
+            assertClose(-10000, cell.adjustCurrentHeat(20000), 1e-9, "10 000 refused");
             assertClose(60000, cell.getCurrentHeat(), 1e-9, "clamped to capacity, never above");
         }
 
@@ -106,14 +108,16 @@ class PassiveComponentsTest {
         }
 
         /**
-         * CODE_REVIEW.md P3-6: {@code currentCellCooling} accumulates negative heat too, unlike
-         * {@link Condensator} which early-returns. Only the peak is ever reported, and the peak is
-         * maintained with {@code Math.max}, so this is invisible in the UI -- but it is a real
-         * asymmetry between the two cell types.
+         * CODE_REVIEW.md P3-6: {@code currentCellCooling} used to accumulate negative heat too,
+         * unlike {@link Condensator} which early-returns. It is now sign-guarded, so draining the
+         * cell (a component heat vent passes {@code -sideVent}) no longer decrements the running
+         * figure. The dip was always invisible in the UI because only {@code bestCellCooling} is
+         * reported and it is a {@code Math.max} -- and the corpus confirms the guard moves 0 of 304
+         * designs, so the peak never depended on a dipped running figure.
          */
         @Test
-        @DisplayName("currentCellCooling is decremented by cooling, though the peak is not")
-        void currentCellCoolingIsNotSignGuarded() {
+        @DisplayName("only absorbed heat counts as cooling credit")
+        void coolingCreditIgnoresDraining() {
             Reactor reactor = new Reactor();
             CoolantCell cell = (CoolantCell) place(reactor, 2, 2, "coolantCell60k");
             cell.preReactorTick();
@@ -122,8 +126,9 @@ class PassiveComponentsTest {
             assertClose(500, cell.getBestCellCooling(), 1e-9, "peak 500");
 
             cell.adjustCurrentHeat(-200);
-            assertClose(300, cell.getCurrentCellCooling(), 1e-9, "current drops with cooling");
-            assertClose(500, cell.getBestCellCooling(), 1e-9, "peak is unaffected, which is what gets reported");
+            assertClose(300, cell.getCurrentHeat(), 1e-9, "the heat really does drop");
+            assertClose(500, cell.getCurrentCellCooling(), 1e-9, "but the credit does not decrement");
+            assertClose(500, cell.getBestCellCooling(), 1e-9, "and the peak is unchanged");
         }
 
         @Test
@@ -417,15 +422,57 @@ class PassiveComponentsTest {
         @Test
         @DisplayName("mox GG rods scale with their own bonus, not with the global 1.5")
         void moxRodsUseTheirOwnBonus() {
-            // The override replaces FuelRod.getHeatBonus() wholesale, so the GT5.09/GTNH 1.5
-            // never reaches a GG rod. Worth pinning: flipping the GT version does not change a
-            // compressed-plutonium rod's output the way it changes a vanilla mox rod's.
+            // The override replaces FuelRod.getHeatBonus() wholesale. Pinned as intended behaviour
+            // (P3-17 retracted): a GoodGenerator rod is GTNH-native whatever the version toggle
+            // says, and its bonus is its own number in the same units as the mode-derived one.
             FuelRod.setGTNHBehavior(true);
             FuelRod ggMox = (FuelRod) ComponentFactory.createComponent("fuelRodCompressedPlutonium");
             assertClose(6, ggMox.getHeatBonus(), 1e-9, "GG mox keeps its own bonus even in GTNH mode");
 
             FuelRod plainMox = (FuelRod) ComponentFactory.createComponent("fuelRodMox");
             assertClose(1.5, plainMox.getHeatBonus(), 1e-9, "a vanilla mox rod does get 1.5");
+            FuelRod.setGTNHBehavior(false);
+        }
+
+        /**
+         * The consequence the P3-17 review describes, pinned as intended behaviour: flipping the
+         * version toggle moves a vanilla mox rod's output but leaves a GoodGenerator rod's alone.
+         * Measured at full hull heat, one rod alone in an otherwise empty reactor, so the numbers
+         * below are the whole formula. A high-density plutonium rod is GTNH-sourced, so it takes the
+         * GTNH energy formula either way: 100 EU x10 x(1 + rodCount/2, which is 0 for a single rod)
+         * = 1000 EU, and its own bonus of 6 multiplies that by (1 + 6 x 1) = 7000 EU/t. A vanilla
+         * mox rod has a null sourceMod, so the toggle picks both the formula and the bonus: 100 EU
+         * x(1 + 4 x 1) = 500 EU/t with the toggle off, 1000 EU x(1 + 1.5 x 1) = 2500 EU/t with it on.
+         */
+        @Test
+        @DisplayName("the version toggle moves a vanilla mox rod but not a GG one")
+        void versionToggleMovesVanillaRodsOnly() {
+            Reactor ggVanillaMode = new Reactor();
+            place(ggVanillaMode, 2, 2, "fuelRodCompressedPlutonium");
+            ggVanillaMode.setCurrentHeat(ggVanillaMode.getMaxHeat());
+            ((FuelRod) ggVanillaMode.getComponentAt(2, 2)).generateEnergy();
+            assertClose(7000, ggVanillaMode.getCurrentEUoutput(), 1e-9, "GG mox, toggle off");
+
+            FuelRod.setGTNHBehavior(true);
+            Reactor ggGTNHMode = new Reactor();
+            place(ggGTNHMode, 2, 2, "fuelRodCompressedPlutonium");
+            ggGTNHMode.setCurrentHeat(ggGTNHMode.getMaxHeat());
+            ((FuelRod) ggGTNHMode.getComponentAt(2, 2)).generateEnergy();
+            assertClose(7000, ggGTNHMode.getCurrentEUoutput(), 1e-9, "GG mox, toggle on: unchanged");
+            FuelRod.setGTNHBehavior(false);
+
+            Reactor vanillaVanillaMode = new Reactor();
+            place(vanillaVanillaMode, 2, 2, "fuelRodMox");
+            vanillaVanillaMode.setCurrentHeat(vanillaVanillaMode.getMaxHeat());
+            ((FuelRod) vanillaVanillaMode.getComponentAt(2, 2)).generateEnergy();
+            assertClose(500, vanillaVanillaMode.getCurrentEUoutput(), 1e-9, "vanilla mox, toggle off");
+
+            FuelRod.setGTNHBehavior(true);
+            Reactor vanillaGTNHMode = new Reactor();
+            place(vanillaGTNHMode, 2, 2, "fuelRodMox");
+            vanillaGTNHMode.setCurrentHeat(vanillaGTNHMode.getMaxHeat());
+            ((FuelRod) vanillaGTNHMode.getComponentAt(2, 2)).generateEnergy();
+            assertClose(2500, vanillaGTNHMode.getCurrentEUoutput(), 1e-9, "vanilla mox, toggle on");
             FuelRod.setGTNHBehavior(false);
         }
 

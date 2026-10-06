@@ -54,8 +54,16 @@ public class ReactorItem {
         return automationThreshold;
     }
 
+    // Bounded below and above, but deliberately not to this component's capacity. The field is
+    // compared against current heat on one automation path and against current damage on another,
+    // so it has no single meaningful upper bound and a threshold above the component's own capacity
+    // is coherent intent ("never automate this part") that must survive. What is refused is the
+    // range the code format cannot carry: a value the writer cannot store would make the *next*
+    // getCode() throw a bare IllegalArgumentException out of BigintStorage.store. A rev-4 code
+    // legitimately carries any value in that range, and no code reader or GUI spinner can produce
+    // a negative today, so the lower guard is insurance (CODE_REVIEW.md P3-12 and its follow-up).
     public void setAutomationThreshold(final int value) {
-        if (maxHeat > 1 || maxDamage > 1) {
+        if ((maxHeat > 1 || maxDamage > 1) && value >= 0 && value <= Reactor.MAX_AUTOMATION_THRESHOLD) {
             automationThreshold = value;
         }
     }
@@ -66,8 +74,13 @@ public class ReactorItem {
         return reactorPause;
     }
 
+    // Bounded to the range the reactor code can carry: the writer stores the pause with a bound of
+    // 10e3, the reader extracts it with the same bound, and the GUI spinner offers the same range.
+    // A legacy code applies its 'p' parameter with no bound at all, so refusing here is what keeps
+    // an out-of-range pause from making getCode() throw and from pausing a simulated run forever.
+    // Refuse rather than clamp, matching setInitialHeat above.
     public void setReactorPause(final int value) {
-        if (maxHeat > 1 || maxDamage > 1) {
+        if ((maxHeat > 1 || maxDamage > 1) && value >= 0 && value <= Reactor.MAX_REACTOR_PAUSE) {
             reactorPause = value;
         }
     }
@@ -362,12 +375,22 @@ public class ReactorItem {
      * @return the amount of heat adjustment refused. (e.g. due to going below minimum heat, breaking due to excessive heat, or attempting to remove heat from a condensator)
      */
     public double adjustCurrentHeat(final double heat) {
+        // isHeatAcceptor() folds in !isBroken(), and that is deliberate rather than sloppy: a
+        // component that is broken -- at heat capacity, or out of durability -- accepts nothing at
+        // all, leaves its stored heat alone, and reports the whole adjustment as refused. A
+        // coolant cell that reaches capacity is broken in game and cannot be drained by cooling it,
+        // so relaxing this to "maxHeat > 1" lets the simulation drain a full cell and turns an
+        // overheating design into a safe one (measured: 4 of 304 corpus designs stop exploding).
+        // See CODE_REVIEW.md P3-16; pinned by ReactorItemTest.brokenComponentPassesAdjustmentsThrough.
         if (isHeatAcceptor()) {
             double result = 0.0;
             double tempHeat = getCurrentHeat();
             tempHeat += heat;
             if (tempHeat > getMaxHeat()) {
-                result = getMaxHeat() - tempHeat + 1;
+                // The refusal is exactly the amount not accepted: offering H to a cell with room
+                // for R returns -(H - R). The old "+ 1" reported an overflow of N as -(N - 1).
+                // See CODE_REVIEW.md P3-15.
+                result = getMaxHeat() - tempHeat;
                 tempHeat = getMaxHeat();
             } else if (tempHeat < 0.0) {
                 result = tempHeat;

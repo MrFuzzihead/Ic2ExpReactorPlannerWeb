@@ -215,10 +215,12 @@ class ComponentFactoryTest {
             ReactorItem item = ComponentFactory.createComponent(id);
             String[] tooltip = item.formatTooltip();
             if (item instanceof Plating) {
-                // Plating is the one type that does not override formatTooltip(), so it inherits
-                // the base class's null. ReactorPlannerFrame.buildTooltipInfo relies on catching
-                // that and falling back to a bare name.
-                assertNull(tooltip, item.baseName + " is plating and has no tooltip override");
+                // Plating overrides formatTooltip() with an empty list: its Bundle strings are
+                // prose with no %s placeholders, so there are no values to format. The frame
+                // appends them unchanged, which is the text it used to reach by catching the
+                // base class's null.
+                assertNotNull(tooltip, item.baseName + " is plating and must not return null");
+                assertEquals(0, tooltip.length, item.baseName + " is plating and formats no values");
                 continue;
             }
             assertNotNull(tooltip, item.baseName + " returned a null tooltip");
@@ -230,14 +232,14 @@ class ComponentFactoryTest {
     }
 
     @Test
-    @DisplayName("plating is the only component type without a tooltip override")
+    @DisplayName("plating is the only component type whose tooltip formats no values")
     void onlyPlatingLacksATooltip() {
         for (int id = 1; id < ComponentFactory.getComponentCount(); id++) {
             ReactorItem item = ComponentFactory.createComponent(id);
             if (item instanceof Plating) {
-                assertNull(item.formatTooltip(), item.baseName + " should have no tooltip");
+                assertEquals(0, item.formatTooltip().length, item.baseName + " formats nothing");
             } else {
-                assertNotNull(item.formatTooltip(), item.baseName + " should have a tooltip");
+                assertTrue(item.formatTooltip().length > 0, item.baseName + " should format something");
             }
         }
     }

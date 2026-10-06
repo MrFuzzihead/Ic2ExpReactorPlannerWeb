@@ -7,11 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import Ic2ExpReactorPlanner.ComponentFactory;
 import Ic2ExpReactorPlanner.Reactor;
+
 import Ic2ExpReactorPlanner.TestSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -32,12 +32,11 @@ import org.junit.jupiter.params.provider.CsvSource;
  *   then the sign is decided by which side is hotter
  * </pre>
  *
- * <p><b>Known bug (CODE_REVIEW.md P0-1).</b> The four cap lines in the reactor block read
- * {@code switchSide} instead of {@code switchReactor}. Because the two differ for three of the
- * four exchangers the cascade is wrong whenever {@code 0.25 <= sum < 1.0}. This class pins the
- * behaviour as it is today (so a refactor cannot silently move it) and carries a disabled
- * contract test describing the behaviour the code is supposed to have. Delete the
- * {@code @Disabled} annotations when the bug is fixed.
+ * <p>The reactor-side cascade used to scale by {@code switchSide} instead of
+ * {@code switchReactor}, which is a different constant for three of the four exchangers, so the
+ * table was wrong for {@code 0.25 <= sum < 1.0} (CODE_REVIEW.md P0-1, fixed). The table below
+ * is the regression guard for that fix, together with the invariant the fix restores: no
+ * reactor-side transfer may exceed {@code switchReactor}.
  */
 class ExchangerTest {
 
@@ -90,47 +89,104 @@ class ExchangerTest {
         return exchanger.getCurrentHeat() * 50.0 / exchanger.getMaxHeat();
     }
 
-    // ------------------------------------------------------------------ characterisation
+    // ------------------------------------------------------------------ reactor side
 
     @Nested
-    @DisplayName("current behaviour: reactor-side cascade")
-    class CurrentReactorCascade {
+    @DisplayName("reactor-side cascade")
+    class ReactorSideCascade {
 
-        @Test
-        @DisplayName("coreHeatExchanger moves no heat at all for 0.25 <= sum < 1.0")
-        void coreExchangerMovesNothing() {
-            // switchSide is 0, so all four cap tiers evaluate to 0.
-            assertClose(0, transferAtSum("coreHeatExchanger", 0.37), 1e-9, "sum ~ 0.37 -> tier <0.5");
-            assertClose(0, transferAtSum("coreHeatExchanger", 0.62), 1e-9, "sum ~ 0.62 -> tier <0.75");
-            assertClose(0, transferAtSum("coreHeatExchanger", 0.87), 1e-9, "sum ~ 0.87 -> tier <1.0");
+        /**
+         * The tier table. The {@code if}s cascade, so the <em>last</em> matching tier wins:
+         *
+         * <pre>
+         *   0.75 &lt;= sum &lt; 1.0  ->  switchReactor / 2
+         *   0.50 &lt;= sum &lt; 0.75 ->  switchReactor / 4
+         *   0.25 &lt;= sum &lt; 0.50 ->  switchReactor / 8
+         *   sum &lt; 0.25           ->  1
+         *   sum &gt;= 1.0           ->  no tier fires; the round-and-clamp value stands
+         * </pre>
+         *
+         * The cap is {@code switchReactor} because that is the capacity of the transfer this
+         * block performs. It used to read {@code switchSide}, which is a different constant for
+         * three of the four exchangers, so the whole table below was wrong for the
+         * {@code 0.25 <= sum < 1.0} range -- see CODE_REVIEW.md P0-1. Note the integer
+         * division: {@code heatExchanger}'s cap of 4 gives 0 in the {@code /8} band.
+         */
+        @ParameterizedTest(name = "{0} at sum ~{1} moves {2}")
+        @CsvSource({
+            // baseName,                targetSum, expected move
+            "coreHeatExchanger,          0.37,      9",  // 72 / 8
+            "coreHeatExchanger,          0.62,      18", // 72 / 4
+            "coreHeatExchanger,          0.87,      36", // 72 / 2
+            "heatExchanger,              0.37,      0",  // 4 / 8, integer division
+            "heatExchanger,              0.62,      1",  // 4 / 4
+            "heatExchanger,              0.87,      2",  // 4 / 2
+            "advancedHeatExchanger,      0.37,      1",  // 8 / 8
+            "advancedHeatExchanger,      0.62,      2",  // 8 / 4
+            "advancedHeatExchanger,      0.87,      4",  // 8 / 2
+        })
+        @DisplayName("each band scales by switchReactor")
+        void cascadeScalesBySwitchReactor(String baseName, double targetSum, int expected) {
+            assertClose(expected, transferAtSum(baseName, targetSum), 1e-9, baseName + " at sum ~" + targetSum);
         }
 
         @Test
-        @DisplayName("coreHeatExchanger still uses the field-independent 1 for sum < 0.25")
-        void coreExchangerVeryLowStillMovesOne() {
-            // The last tier is a literal 1, so it is unaffected by the field mix-up.
-            assertClose(1, transferAtSum("coreHeatExchanger", 0.10), 1e-9, "sum ~ 0.10");
+        @DisplayName("sum < 0.25 is the field-independent literal 1 for every exchanger")
+        void lowestTierIsOne() {
+            for (String baseName : ALL) {
+                if (exchangerNamed(baseName).getHullCoolingCapacity() == 0) {
+                    continue; // componentHeatExchanger has no reactor side; see below
+                }
+                assertClose(1, transferAtSum(baseName, 0.10), 1e-9, baseName + " at sum ~0.10");
+            }
         }
 
+        /**
+         * The invariant the fix restores. A reactor-side transfer must never move more than the
+         * exchanger's own reactor capacity, in either direction; the cascade's whole job is to
+         * taper that capacity as the two sides get colder.
+         */
         @Test
-        @DisplayName("heatExchanger over-transfers: uses switchSide where switchReactor was meant")
-        void heatExchangerOverTransfers() {
-            // switchSide 12, switchReactor 4. The ifs cascade, so the last matching tier wins:
-            //   0.75 <= sum < 1.0 -> cap / 2
-            //   0.50 <= sum < 0.75 -> cap / 4
-            //   0.25 <= sum < 0.50 -> cap / 8
-            assertClose(6, transferAtSum("heatExchanger", 0.87), 1e-9, "sum ~ 0.87 -> 12/2 = 6, should be 4/2 = 2");
-            assertClose(3, transferAtSum("heatExchanger", 0.62), 1e-9, "sum ~ 0.62 -> 12/4 = 3, should be 4/4 = 1");
-            assertClose(1, transferAtSum("heatExchanger", 0.37), 1e-9, "sum ~ 0.37 -> 12/8 = 1, should be 4/8 = 0");
+        @DisplayName("no transfer ever exceeds switchReactor")
+        void neverExceedsTheCapacity() {
+            for (String baseName : ALL) {
+                int capacity = (int) exchangerNamed(baseName).getHullCoolingCapacity();
+                if (capacity == 0) {
+                    continue; // componentHeatExchanger has no reactor side
+                }
+                for (double targetSum = 0.05; targetSum < 1.05; targetSum += 0.05) {
+                    double moved = Math.abs(transferAtSum(baseName, targetSum));
+                    assertTrue(
+                            moved <= capacity + 1e-9,
+                            baseName + " moved " + moved + " at sum ~" + targetSum + ", above its capacity of " + capacity);
+                }
+            }
         }
 
+        /**
+         * The part of P0-1 that provably must <em>not</em> have moved: for {@code sum >= 1.0} no
+         * cascade tier fires, so neither {@code switchSide} nor {@code switchReactor} is read and
+         * the transfer is just the round-and-clamp value. That is why the fix's blast radius is
+         * confined to cold exchangers -- hot ones were already correct.
+         */
         @Test
-        @DisplayName("advancedHeatExchanger over-transfers across the whole cascade")
-        void advancedExchangerOverTransfers() {
-            // switchSide 24, switchReactor 8: the code uses 24 where it should use 8.
-            assertClose(12, transferAtSum("advancedHeatExchanger", 0.87), 1e-9, "sum ~ 0.87 -> 24/2 = 12");
-            assertClose(6, transferAtSum("advancedHeatExchanger", 0.62), 1e-9, "sum ~ 0.62 -> 24/4 = 6");
-            assertClose(3, transferAtSum("advancedHeatExchanger", 0.37), 1e-9, "sum ~ 0.37 -> 24/8 = 3");
+        @DisplayName("at sum >= 1.0 the transfer is the clamped value with no cascade")
+        void hotPathIsUnchangedByTheFix() {
+            for (String baseName : ALL) {
+                int capacity = (int) exchangerNamed(baseName).getHullCoolingCapacity();
+                if (capacity == 0) {
+                    continue;
+                }
+                double targetSum = 2.0;
+                double expected = Math.min(
+                        Math.round(10000.0 / 100.0 * targetSum), // a bare reactor is 10 000
+                        capacity);
+                assertClose(
+                        expected,
+                        transferAtSum(baseName, targetSum),
+                        1e-9,
+                        baseName + " at sum ~2.0 should be the clamp, not a cascade tier");
+            }
         }
 
         @Test
@@ -182,45 +238,51 @@ class ExchangerTest {
             assertClose(0, reactor.getCurrentHeat() - before, 1e-9, "no transfer at equal percent heat");
         }
     }
-
-    // ------------------------------------------------------------------ contract (P0-1)
-
-    @Nested
-    @Disabled("CODE_REVIEW.md P0-1: the reactor-side cascade must use switchReactor, not switchSide")
-    @DisplayName("intended behaviour: reactor-side cascade uses switchReactor")
-    class IntendedReactorCascade {
-
-        @ParameterizedTest(name = "{0} sum ~{2} should move {3}")
-        @CsvSource({
-            // baseName,                 targetSum, expected move  (switchReactor-based cap tiers)
-            "coreHeatExchanger,          0.37,     9",  // 72 / 8
-            "coreHeatExchanger,          0.62,     18", // 72 / 4
-            "coreHeatExchanger,          0.87,     36", // 72 / 2
-            "heatExchanger,              0.37,     1",  // 4 / 4
-            "heatExchanger,              0.62,     0",  // 4 / 8, integer division
-            "heatExchanger,              0.87,     2",  // 4 / 2
-            "advancedHeatExchanger,      0.37,     2",  // 8 / 4
-            "advancedHeatExchanger,      0.62,     1",  // 8 / 8
-            "advancedHeatExchanger,      0.87,     4",  // 8 / 2
-        })
-        void cascadeUsesSwitchReactor(String baseName, double targetSum, int expected) {
-            assertClose(expected, transferAtSum(baseName, targetSum), 1e-9, baseName + " at sum ~" + targetSum);
-        }
-
-        @Test
-        @DisplayName("sum < 0.25 stays 1 for every exchanger (field-independent literal)")
-        void lowestTierIsOne() {
-            for (String baseName : ALL) {
-                assertClose(1, transferAtSum(baseName, 0.10), 1e-9, baseName + " sum ~0.10");
-            }
-        }
-    }
-
     // ------------------------------------------------------------------ component side
 
     @Nested
     @DisplayName("component-side transfer")
     class ComponentSide {
+
+        /**
+         * The side cascade, which scales by {@code switchSide} and was <em>always</em> correct.
+         *
+         * <p>This exists to guard against the over-correction of P0-1: someone "fixing" the
+         * wrong block by switching the side cascade to {@code switchReactor} would break every
+         * side-transfer value, and the behaviour tests in this class only assert
+         * {@code > 0}, so they would not notice.
+         *
+         * <p>With the exchanger at 0 heat, {@code sum} is just the neighbour's percent-of-maxHeat.
+         * Note that {@code heatablemed} is a <i>percentage</i> (0-100), so a neighbour "at 0.9%"
+         * is charged to {@code maxHeat * 0.9 / 100}.
+         */
+        @ParameterizedTest(name = "{0} at neighbour {1}% of capacity moves {2}")
+        @CsvSource({
+            // baseName,                 neighbourPercent, expected move
+            "heatExchanger,              0.90,             6",  // 12 / 2
+            "heatExchanger,              0.60,             3",  // 12 / 4
+            "heatExchanger,              0.37,             1",  // 12 / 8
+            "heatExchanger,              0.10,             1",  // field-independent literal
+            "componentHeatExchanger,     0.90,             18", // 36 / 2
+            "componentHeatExchanger,     0.60,             9",  // 36 / 4
+            "componentHeatExchanger,     0.37,             4",  // 36 / 8
+            "componentHeatExchanger,     0.10,             1",  // field-independent literal
+        })
+        @DisplayName("each band scales by switchSide, not switchReactor")
+        void sideCascadeScalesBySwitchSide(String baseName, double neighbourPercent, int expected) {
+            Reactor reactor = new Reactor();
+            Exchanger exchanger = (Exchanger) place(reactor, 2, 2, baseName);
+            CoolantCell cell = (CoolantCell) place(reactor, 2, 1, "coolantCell60k");
+            reactor.setCurrentHeat(0);
+            cell.adjustCurrentHeat(cell.getMaxHeat() * neighbourPercent / 100.0);
+
+            exchanger.transfer();
+            assertClose(
+                    expected,
+                    cell.getMaxHeat() * neighbourPercent / 100.0 - cell.getCurrentHeat(),
+                    1e-9,
+                    baseName + " at neighbour " + neighbourPercent + "% of capacity");
+        }
 
         @Test
         @DisplayName("moves heat into an adjacent coolant cell and takes it from the reactor hull")

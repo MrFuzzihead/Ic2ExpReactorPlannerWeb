@@ -64,8 +64,10 @@ public class Exchanger extends ReactorItem {
         // Code adapted from decompiled IC2 code, class ItemReactorHeatSwitch, with permission from Thunderdark.
         double myHeat = 0;
         if (switchSide > 0) {
+            // P2-3(d): this component's own heat is only adjusted after both blocks below, so mymed
+            // is loop-invariant and does not belong inside the neighbour loop.
+            final double mymed = getCurrentHeat() * 100.0 / getMaxHeat();
             for (ReactorItem heatableNeighbor : heatableNeighbors) {
-                double mymed = getCurrentHeat() * 100.0 / getMaxHeat();
                 double heatablemed = heatableNeighbor.getCurrentHeat() * 100.0 / heatableNeighbor.getMaxHeat();
 
                 double add = (int) (heatableNeighbor.getMaxHeat() / 100.0 * (heatablemed + mymed / 2.0));
@@ -101,14 +103,18 @@ public class Exchanger extends ReactorItem {
             if (add > switchReactor) {
                 add = switchReactor;
             }
+            // The low-heat cascade scales the transfer by the capacity of the transfer being
+            // performed, which in this block is always switchReactor. It used to read
+            // switchSide here, which for three of the four exchangers is a different constant;
+            // see CODE_REVIEW.md P0-1.
             if (Reactormed + mymed / 2.0 < 1.0) {
-                add = switchSide / 2;
+                add = switchReactor / 2;
             }
             if (Reactormed + mymed / 2.0 < 0.75) {
-                add = switchSide / 4;
+                add = switchReactor / 4;
             }
             if (Reactormed + mymed / 2.0 < 0.5) {
-                add = switchSide / 8;
+                add = switchReactor / 8;
             }
             if (Reactormed + mymed / 2.0 < 0.25) {
                 add = 1;

@@ -2,11 +2,11 @@ package Ic2ExpReactorPlanner;
 
 import static Ic2ExpReactorPlanner.TestSupport.assertClose;
 import static Ic2ExpReactorPlanner.TestSupport.place;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import Ic2ExpReactorPlanner.components.Condensator;
@@ -14,6 +14,8 @@ import Ic2ExpReactorPlanner.components.CoolantCell;
 import Ic2ExpReactorPlanner.components.FuelRod;
 import Ic2ExpReactorPlanner.components.Plating;
 import Ic2ExpReactorPlanner.components.ReactorItem;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -339,16 +341,27 @@ class ReactorCodeSerializationTest {
         }
 
         @Test
-        @DisplayName("a non-default resume temperature is emitted as its own suffix field")
+        @DisplayName("the resume temp is suppressed against its own default")
         void resumeTempSuffix() {
-            // getOldCode compares resumeTemp against DEFAULT_SUSPEND_TEMP rather than
-            // DEFAULT_RESUME_TEMP (CODE_REVIEW.md P3-3). The two constants are both 120e3 today
-            // so it happens to work; this test passes today and would catch a divergence.
+            // P3-3: getOldCode used to compare resumeTemp against DEFAULT_SUSPEND_TEMP. Both
+            // constants are 120e3 today, so the two spellings agree and no value can tell them
+            // apart - the assertions below are the guard for the moment they diverge.
+            final int defaultResume = new Reactor().getResumeTemp();
+
             Reactor reactor = new Reactor();
             reactor.setPulsed(true);
-            reactor.setResumeTemp(60000);
+            reactor.setResumeTemp(defaultResume - 60000);
             String old = reactor.getOldCode();
-            assertTrue(old.contains("|r"), "resume temp field emitted: " + old);
+            assertTrue(old.contains("|r"), "a non-default resume temp is emitted: " + old);
+
+            Reactor back = new Reactor();
+            back.setCode(old);
+            assertEquals(defaultResume - 60000, back.getResumeTemp(), "and survives the round trip");
+
+            Reactor atDefault = new Reactor();
+            atDefault.setPulsed(true);
+            atDefault.setResumeTemp(defaultResume);
+            assertFalse(atDefault.getOldCode().contains("|r"), "the default is not written");
         }
     }
 
@@ -385,52 +398,322 @@ class ReactorCodeSerializationTest {
          */
         @Test
         @DisplayName("a synthetic Talonius code places components")
-        void syntheticCode() throws Throwable {
+        void syntheticCode() {
             java.math.BigInteger value = java.math.BigInteger.ONE.shiftLeft(10 + 7 * 53);
             String code = value.toString(36);
 
-            java.lang.reflect.Method handle =
-                    Reactor.class.getDeclaredMethod("handleTaloniusCode", String.class);
-            handle.setAccessible(true);
-
-            Reactor reactor = new Reactor();
-            try {
-                handle.invoke(reactor, code);
-            } catch (java.lang.reflect.InvocationTargetException e) {
-                // In a headless JVM the warning JOptionPane throws; the grid work has already
-                // happened by then, which is all this test needs.
-                if (!(e.getCause() instanceof java.awt.HeadlessException)) {
-                    throw e.getCause();
+            // No reflection and no display: P3-10 replaced the direct JOptionPane call in
+            // handleTaloniusCode with WarningDisplay, so the warning sink absorbs it.
+            final List<String> warnings = new ArrayList<>();
+            WarningDisplay.setSink(new WarningDisplay.Sink() {
+                @Override
+                public void warn(String title, String message) {
+                    warnings.add(message);
                 }
+            });
+            try {
+                Reactor reactor = new Reactor();
+                reactor.setCode(code);
+                assertTrue(warnings.isEmpty(), "a fully recognised code warns nothing, got: " + warnings);
+                assertClose(
+                        0,
+                        reactor.getCurrentHeat(),
+                        1e-9,
+                        "initial heat is read in multiples of 100, so 0 here");
+                assertNotNull(reactor.getComponentAt(0, 0), "the last field read lands at row 0, column 0");
+                assertEquals("fuelRodUranium", reactor.getComponentAt(0, 0).baseName, "a uranium rod");
+                assertEquals(1, TestSupport.componentsOf(reactor).size(), "and nothing else was placed");
+            } finally {
+                WarningDisplay.setSink(null);
             }
-            assertClose(
-                    0, reactor.getCurrentHeat(), 1e-9, "initial heat is read in multiples of 100, so 0 here");
-            assertNotNull(reactor.getComponentAt(0, 0), "the last field read lands at row 0, column 0");
-            assertEquals("fuelRodUranium", reactor.getComponentAt(0, 0).baseName, "a uranium rod");
-            assertEquals(1, TestSupport.componentsOf(reactor).size(), "and nothing else was placed");
         }
     }
 
     // ================================================================== malformed input
 
     @Nested
-    @DisplayName("malformed input")
+    @DisplayName("malformed input is refused whole")
     class Malformed {
 
-        @Test
-        @DisplayName("an unsupported code revision is rejected")
-        void unsupportedRevision() {
-            BigintStorage storage = new BigintStorage();
-            storage.store(0, (int) 5e6); // maxSimulationTicks
-            storage.store(0, 1); // RCIs
-            storage.store(0, 1); // fluid
-            storage.store(0, (int) 120e3); // currentHeat
-            storage.store(5, 255); // revision 5 -- does not exist
+        private final List<String> warnings = new ArrayList<>();
+
+        private void captureWarnings() {
+            WarningDisplay.setSink(new WarningDisplay.Sink() {
+                @Override
+                public void warn(String title, String message) {
+                    warnings.add(message);
+                }
+            });
+        }
+
+        /** A reactor in a distinctive state, so "unchanged" means something. */
+        private Reactor populated() {
             Reactor reactor = new Reactor();
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> reactor.setCode("erp=" + storage.outputBase64()),
-                    "revision 5 does not exist");
+            TestSupport.place(reactor, 2, 2, "quadFuelRodUranium");
+            reactor.setComponentAt(0, 8, ComponentFactory.createComponent("reactorPlating"));
+            reactor.setFluid(true);
+            reactor.setPulsed(true);
+            reactor.setOnPulse(1111);
+            reactor.setCurrentHeat(2222);
+            reactor.setMaxSimulationTicks(3333);
+            return reactor;
+        }
+
+        private void assertRefusedAndUnchanged(String description, String code) {
+            assertRefusedAndUnchanged(description, code, null);
+        }
+
+        /**
+         * @param expectedReason a fragment the warning must contain, so a *deliberate* refusal can
+         *     be told apart from an accidental one. The deliberate refusals carry a message naming
+         *     what was wrong; a raw bounds exception would otherwise be indistinguishable from
+         *     them, and the guards would be untested.
+         */
+        private void assertRefusedAndUnchanged(String description, String code, String expectedReason) {
+            warnings.clear(); // each assertion checks its own warning, not the first of a batch
+            Reactor reactor = populated();
+            String before = reactor.getCode();
+            int maxHeatBefore = (int) reactor.getMaxHeat();
+
+            assertDoesNotThrow(() -> reactor.setCode(code), description + " must not throw");
+
+            assertFalse(warnings.isEmpty(), description + " should have warned, got: " + warnings);
+            // The bundle entry is a format string, so compare against its fixed prefix.
+            String invalidPrefix = BundleHelper.getI18n("Warning.InvalidReactorCode").split("%")[0];
+            assertTrue(
+                    warnings.get(0).startsWith(invalidPrefix),
+                    description + " should be reported as an invalid code, got: " + warnings.get(0));
+            if (expectedReason != null) {
+                assertTrue(
+                        warnings.get(0).contains(expectedReason),
+                        description + " should say why: " + expectedReason + ", got: " + warnings.get(0));
+            }
+
+            assertEquals(before, reactor.getCode(), description + " must leave the design untouched");
+            assertEquals(
+                    maxHeatBefore,
+                    (int) reactor.getMaxHeat(),
+                    description + " must leave the plating-derived max heat untouched");
+            assertTrue(reactor.isFluid(), description + " must leave the mode flags untouched");
+            assertTrue(reactor.isPulsed(), description + " must leave the pulse flag untouched");
+            assertEquals(1111, reactor.getOnPulse(), description + " must leave the pulse settings alone");
+            assertEquals(2222, (int) reactor.getCurrentHeat(), description + " must leave the heat alone");
+            assertEquals(
+                    3333, reactor.getMaxSimulationTicks(), description + " must leave the tick limit alone");
+        }
+
+        @Test
+        @DisplayName("an unsupported code revision is refused, not thrown")
+        void unsupportedRevision() {
+            captureWarnings();
+            try {
+                BigintStorage storage = new BigintStorage();
+                storage.store(0, (int) 5e6); // maxSimulationTicks
+                storage.store(0, 1); // RCIs
+                storage.store(0, 1); // fluid
+                storage.store(0, (int) 120e3); // currentHeat
+                storage.store(5, 255); // revision 5 -- does not exist
+                assertRefusedAndUnchanged("revision 5", "erp=" + storage.outputBase64(), "Unsupported code revision 5");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("a cell with four parameters is refused, and says so")
+        void fourParametersRefused() {
+            captureWarnings();
+            try {
+                StringBuilder code = new StringBuilder("01(h1,a2,p3,h4)");
+                while (code.length() < 108) {
+                    code.append("00");
+                }
+                code.append("|fes");
+                assertRefusedAndUnchanged(
+                        "four parameters", code.toString(), "too many parameters for the cell at row 0 column 0");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("a one-character suffix is refused, not thrown")
+        void shortSuffixRefused() {
+            captureWarnings();
+            try {
+                StringBuilder code = new StringBuilder();
+                for (int i = 0; i < 54; i++) {
+                    code.append("00");
+                }
+                assertRefusedAndUnchanged("a |f suffix", code + "|f");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("an oversized current heat is refused, so it can no longer poison getCode()")
+        void oversizedHeatRefused() {
+            captureWarnings();
+            try {
+                StringBuilder code = new StringBuilder();
+                for (int i = 0; i < 54; i++) {
+                    code.append("00");
+                }
+                // 181 454, above the 120 000 storage bound.
+                assertRefusedAndUnchanged(
+                        "heat of 181 454", code + "|fes3W0E", "current heat of 181454 is outside the encodable range");
+
+                // The original symptom was a *second* call throwing: the value loaded fine but
+                // getCode() could not encode it. That is now impossible.
+                Reactor reactor = new Reactor();
+                reactor.setCode(code.toString() + "|fesZZ");
+                assertDoesNotThrow(reactor::getCode, "a refused code must not leave getCode() in a bad state");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("an out-of-range on-pulse or temperature is refused too")
+        void outOfRangePulseSettingsRefused() {
+            captureWarnings();
+            try {
+                StringBuilder code = new StringBuilder();
+                for (int i = 0; i < 54; i++) {
+                    code.append("00");
+                }
+                // Written as decimal and converted here, so the intent cannot drift. Each value
+                // must parse as an int and still exceed the bound: something like "ZZZZZZZZ"
+                // overflows Integer.parseInt and would be refused for the wrong reason, leaving
+                // the range check itself untested.
+                String longOnPulse = Integer.toString(5000001, 36); // bound 5 000 000
+                String longSuspend = Integer.toString(120001, 36); // bound 120 000
+                assertRefusedAndUnchanged(
+                        "an oversized on-pulse", code + "|fes|n" + longOnPulse, "on-pulse of 5000001 is outside");
+                assertRefusedAndUnchanged(
+                        "an oversized off-pulse", code + "|fes|f" + longOnPulse, "off-pulse of 5000001 is outside");
+                assertRefusedAndUnchanged(
+                        "an oversized suspend temperature",
+                        code + "|fes|s" + longSuspend,
+                        "suspend temperature of 120001 is outside");
+                assertRefusedAndUnchanged(
+                        "an oversized resume temperature",
+                        code + "|fes|r" + longSuspend,
+                        "resume temperature of 120001 is outside");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("a value exactly at the bound is accepted")
+        void valuesAtTheBoundAreAccepted() {
+            captureWarnings();
+            try {
+                StringBuilder code = new StringBuilder();
+                for (int i = 0; i < 54; i++) {
+                    code.append("00");
+                }
+                // 5 000 000 and 120 000 are exactly the bounds, and BigintStorage.store accepts
+                // them inclusively, so these must NOT be refused.
+                Reactor reactor = new Reactor();
+                reactor.setCode(code + "|fes|n" + Integer.toString(5000000, 36) + "|fesZZ");
+                assertTrue(warnings.isEmpty(), "values at the bound are legal, got: " + warnings);
+                assertEquals(5000000, reactor.getOnPulse(), "on-pulse was read");
+                assertNotNull(reactor.getCode(), "and the whole code is still encodable");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("a non-base36 digit is refused rather than raising NumberFormatException")
+        void nonNumericParameterRefused() {
+            captureWarnings();
+            try {
+                StringBuilder code = new StringBuilder("01(hZZ,a2)");
+                while (code.length() < 108) {
+                    code.append("00");
+                }
+                code.append("|fes");
+                assertRefusedAndUnchanged("a non-numeric parameter", code.toString());
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        /**
+         * A documented limitation of the format rather than a bug: neither the legacy hex form
+         * nor the Base64 payload carries a checksum, so a string that merely *looks* well formed
+         * is interpreted rather than refused. "00AF" decodes as Base64 into a revision-0 payload
+         * whose fields all read as zero, which loads as a blank reactor.
+         *
+         * <p>Strict parsing can guarantee "never crashes, never half-applies", but it cannot
+         * distinguish that from a real code without an integrity check in the format. Recorded
+         * here so a future attempt to add one knows this is the remaining hole.
+         */
+        @Test
+        @DisplayName("a well-formed but meaningless payload is interpreted, not refused")
+        void meaninglessPayloadIsInterpretedNotRefused() {
+            captureWarnings();
+            try {
+                Reactor reactor = new Reactor();
+                // Decodes to 4097, so revision 1, an empty grid, and zeros everywhere else: junk,
+                // but junk the format still describes, so it is read rather than refused.
+                assertDoesNotThrow(() -> reactor.setCode("ABAB"), "must still not throw");
+                assertTrue(warnings.isEmpty(), "and there is nothing to warn about, got: " + warnings);
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("a payload whose leading byte has the high bit set is refused")
+        void negativePayloadRefused() {
+            captureWarnings();
+            try {
+                // 00AF decodes as a negative two's-complement number, so every field in it would
+                // extract negative. The revision check lets it through (a negative revision is not
+                // above 4) and the reactor then holds a tick limit that store refuses, which is to
+                // say a design getCode() cannot write back.
+                assertRefusedAndUnchanged(
+                        "a high-bit payload",
+                        "00AF",
+                        "the code decodes to a negative payload");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("a base64 payload that will not decode is refused")
+        void undecodableBase64Refused() {
+            captureWarnings();
+            try {
+                // Matches [0-9A-Za-z+/=]+ but its length is not a valid Base64 length.
+                assertRefusedAndUnchanged("a 3-character payload", "ABC");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("a valid base-36 heat is still accepted, and still encodable")
+        void inRangeHeatStillWorks() {
+            captureWarnings();
+            try {
+                StringBuilder code = new StringBuilder();
+                for (int i = 0; i < 54; i++) {
+                    code.append("00");
+                }
+                Reactor reactor = new Reactor();
+                reactor.setCode(code + "|fesZZ");
+                assertEquals(1295, (int) reactor.getCurrentHeat(), "parsed");
+                assertNotNull(reactor.getCode(), "and still encodable");
+            } finally {
+                WarningDisplay.setSink(null);
+            }
         }
 
         @Test
@@ -440,9 +723,6 @@ class ReactorCodeSerializationTest {
                 Reactor reactor = new Reactor();
                 reactor.setCode("erp=" + codeForRevision(revision));
                 assertNotNull(reactor, "revision " + revision + " should decode");
-                assertFalse(
-                        reactor.isFluid() && !codeForRevision(revision).isEmpty(),
-                        "revision " + revision + " decoded to something");
             }
         }
 
@@ -457,63 +737,47 @@ class ReactorCodeSerializationTest {
         }
 
         /**
-         * CODE_REVIEW.md P1-1: a legacy hex code with more than three per-component parameters
-         * overflows the {@code MAX_PARAM_TYPES} array and throws an unchecked exception that
-         * {@code setCode} does not catch.
+         * The strongest available check that the packed stream stays in step: every component
+         * in the registry, carrying every per-component setting, must survive a full
+         * {@code getCode}/{@code setCode} round trip byte for byte.
+         *
+         * <p>This is what would break first if a field were consumed conditionally. The three
+         * automation values used to be extracted inside a {@code component != null} guard, so any
+         * desynchronisation would corrupt everything downstream. (In practice no code can reach
+         * that guard's null branch, because every revision's id field is narrower than the
+         * component registry -- so the reader now consumes the fields unconditionally as defence
+         * in depth, and this test is what proves the stream is aligned either way.)
          */
         @Test
-        @DisplayName("a cell with four parameters throws ArrayIndexOutOfBounds")
-        void fourParametersThrows() {
-            StringBuilder code = new StringBuilder("01(h1,a2,p3,h4)");
-            while (code.length() < 108) {
-                code.append("00");
-            }
-            code.append("|fes");
-            Reactor reactor = new Reactor();
-            assertThrows(ArrayIndexOutOfBoundsException.class, () -> reactor.setCode(code.toString()));
-        }
+        @DisplayName("every component with every setting round-trips byte for byte")
+        void everyComponentWithSettingsRoundTrips() {
+            for (int id = 1; id < ComponentFactory.getComponentCount(); id++) {
+                ReactorItem prototype = ComponentFactory.getDefaultComponent(id);
+                Reactor reactor = new Reactor();
+                reactor.setComponentAt(2, 2, ComponentFactory.createComponent(id));
+                ReactorItem component = reactor.getComponentAt(2, 2);
+                if (component == null) {
+                    continue; // this id is outside the registry
+                }
+                if (component.isHeatAcceptor()) {
+                    component.setInitialHeat((int) (component.getMaxHeat() * 0.5));
+                }
+                if (component.getMaxHeat() > 1 || component.getMaxDamage() > 1) {
+                    component.setAutomationThreshold(1234);
+                    component.setReactorPause(11);
+                }
+                reactor.setAutomated(true);
+                reactor.setCurrentHeat(4321);
+                reactor.setMaxSimulationTicks(999999);
 
-        /** The same finding from the other direction: a truncated suffix has no second character. */
-        @Test
-        @DisplayName("a one-character suffix throws StringIndexOutOfBounds")
-        void shortSuffixThrows() {
-            StringBuilder code = new StringBuilder();
-            for (int i = 0; i < 54; i++) {
-                code.append("00");
-            }
-            Reactor reactor = new Reactor();
-            assertThrows(StringIndexOutOfBoundsException.class, () -> reactor.setCode(code + "|f"));
-        }
+                Reactor back = new Reactor();
+                back.setCode(reactor.getCode());
 
-        /**
-         * The same finding again: the legacy parser clamps nothing, so a large base-36 suffix
-         * produces a current heat above the 120 000 storage bound, and the next call to
-         * {@code getCode()} throws from {@code BigintStorage.store}.
-         */
-        @Test
-        @DisplayName("a legacy code with an oversized heat poisons getCode()")
-        void oversizedHeatPoisonsGetCode() {
-            StringBuilder code = new StringBuilder();
-            for (int i = 0; i < 54; i++) {
-                code.append("00");
+                assertEquals(
+                        reactor.getCode(),
+                        back.getCode(),
+                        prototype.baseName + " did not round-trip with its settings");
             }
-            Reactor reactor = new Reactor();
-            reactor.setCode(code + "|fes3W0E"); // 181 454
-            assertEquals(181454, (int) reactor.getCurrentHeat(), "the heat is read unclamped");
-            assertThrows(IllegalArgumentException.class, reactor::getCode);
-        }
-
-        @Test
-        @DisplayName("a base-36 suffix within range is harmless")
-        void inRangeHeatIsHarmless() {
-            StringBuilder code = new StringBuilder();
-            for (int i = 0; i < 54; i++) {
-                code.append("00");
-            }
-            Reactor reactor = new Reactor();
-            reactor.setCode(code + "|fesZZ");
-            assertEquals(1295, (int) reactor.getCurrentHeat(), "parsed");
-            assertNotNull(reactor.getCode(), "and still encodable");
         }
     }
 

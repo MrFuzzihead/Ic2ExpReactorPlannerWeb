@@ -2,8 +2,19 @@ package Ic2ExpReactorPlanner;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.Image;
+import javax.swing.Icon;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
+import Ic2ExpReactorPlanner.Reactor;
+import Ic2ExpReactorPlanner.ComponentFactory;
 import Ic2ExpReactorPlanner.components.ReactorItem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -113,11 +124,11 @@ class ReactorPlannerFrameMappingTest {
         ReactorItem component = ComponentFactory.getDefaultComponent(baseName);
         assertNotNull(component, label + " mapped to '" + baseName + "', which is not a component");
         if (component instanceof Ic2ExpReactorPlanner.components.Plating) {
-            // Plating is the one type with no formatTooltip() override; the frame catches the
-            // resulting null and falls back to a bare name.
-            org.junit.jupiter.api.Assertions.assertNull(component.formatTooltip(), label + " is plating");
+            // Plating overrides formatTooltip() with an empty list: its Bundle strings are prose
+            // with no %s placeholders, so the frame appends them unchanged.
+            assertEquals(0, component.formatTooltip().length, label + " is plating and formats no values");
         } else {
-            assertNotNull(component.formatTooltip(), label + " has no tooltip data");
+            assertTrue(component.formatTooltip().length > 0, label + " has no tooltip data");
         }
     }
 
@@ -158,6 +169,199 @@ class ReactorPlannerFrameMappingTest {
             String baseName = ComponentFactory.getDefaultComponent(id).baseName;
             assertTrue(mapped.contains(baseName), baseName + " has no tooltip label");
         }
+    }
+
+    // ================================================================== icon cache (P2-1)
+
+    /**
+     * Pinned through the static seam rather than a JFrame: the frame itself is never constructed
+     * in a test, so the cache and the button helper are the parts that can run headless.
+     */
+    @Test
+    @DisplayName("a texture at a fixed size scales once, not once per button")
+    void oneScaledIconPerTextureAndSize() {
+        java.awt.Image texture = ComponentFactory.getDefaultComponent("fuelRodCesium").image;
+        assertNotNull(texture, "the texture did not load in the test environment");
+        javax.swing.ImageIcon first = ReactorPlannerFrame.getCachedIcon(texture, 40);
+        javax.swing.ImageIcon again = ReactorPlannerFrame.getCachedIcon(texture, 40);
+        assertSame(first, again, "the second request re-scaled the texture");
+        assertEquals(40, first.getImage().getWidth(null));
+        assertEquals(40, first.getImage().getHeight(null));
+    }
+
+    @Test
+    @DisplayName("sizes are not confused with each other")
+    void differentSizesGetDifferentIcons() {
+        java.awt.Image texture = ComponentFactory.getDefaultComponent("fuelRodCesium").image;
+        javax.swing.ImageIcon small = ReactorPlannerFrame.getCachedIcon(texture, 20);
+        javax.swing.ImageIcon large = ReactorPlannerFrame.getCachedIcon(texture, 60);
+        assertNotSame(small, large, "the pixel size is not part of the cache key");
+        assertEquals(20, small.getImage().getWidth(null));
+        assertEquals(60, large.getImage().getWidth(null));
+    }
+
+    @Test
+    @DisplayName("the cache is bounded so a resize drag cannot retain every intermediate")
+    void cacheIsBounded() {
+        java.awt.Image texture = ComponentFactory.getDefaultComponent("fuelRodCesium").image;
+        javax.swing.ImageIcon first = ReactorPlannerFrame.getCachedIcon(texture, 1);
+        for (int size = 2; size <= ReactorPlannerFrame.ICON_CACHE_LIMIT + 1; size++) {
+            ReactorPlannerFrame.getCachedIcon(texture, size);
+        }
+        assertNotSame(
+                first,
+                ReactorPlannerFrame.getCachedIcon(texture, 1),
+                "the cache kept every size the sweep asked for");
+    }
+
+    @Test
+    @DisplayName("a button that already has the right icon is left alone")
+    void unchangedSizeLeavesTheButtonAlone() {
+        java.awt.Image texture = ComponentFactory.getDefaultComponent("fuelRodCesium").image;
+        javax.swing.JButton button = new javax.swing.JButton();
+        ReactorPlannerFrame.setComponentIcon(button, texture, 50);
+        javax.swing.Icon applied = button.getIcon();
+        assertNotNull(applied, "a button of a usable size still got no icon");
+        ReactorPlannerFrame.setComponentIcon(button, texture, 50);
+        assertSame(applied, button.getIcon(), "the memo did not hold and the icon was replaced");
+        ReactorPlannerFrame.setComponentIcon(button, texture, 2);
+        assertNull(button.getIcon(), "a button too small to draw on keeps an icon");
+    }
+
+    // ================================================================== resize feedback (P3-7)
+
+    /**
+     * P3-7: {@code plannerResized} used to call {@code setSize()} unconditionally, so every resize
+     * event asked Swing for another resize and re-fired the handler -- the flicker. {@link
+     * ReactorPlannerFrame.clampedFrameSize clampedFrameSize} is the seam that decides whether a
+     * resize is asked for at all, and it is the only part of that handler reachable here: a {@code
+     * JFrame} cannot be constructed in a headless JVM at all ({@code java.awt.HeadlessException}
+     * out of {@code java.awt.Window.<init>}), so the frame itself is never instantiated and the
+     * two lines that honour the {@code null} are pinned by reading, not by running.
+     */
+    @Test
+    @DisplayName("a frame that honours its minimum asks for no resize")
+    void aFrameAtOrAboveItsMinimumAsksForNoResize() {
+        java.awt.Dimension minimum = new java.awt.Dimension(915, 700);
+        assertNull(
+                ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(915, 700), minimum),
+                "exactly at the minimum there is nothing to fix");
+        assertNull(
+                ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(1200, 900), minimum),
+                "above the minimum there is nothing to fix either");
+    }
+
+    @Test
+    @DisplayName("a frame below its minimum is clamped on the axis that is short")
+    void aFrameBelowItsMinimumIsClamped() {
+        java.awt.Dimension minimum = new java.awt.Dimension(915, 700);
+        java.awt.Dimension clamped =
+                ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(900, 700), minimum);
+        assertNotNull(clamped, "the width is short, so a resize is requested");
+        assertEquals(915, clamped.width, "the short axis is raised to the minimum");
+        assertEquals(700, clamped.height, "the axis that already fits is left alone");
+
+        java.awt.Dimension collapsed = ReactorPlannerFrame.clampedFrameSize(new java.awt.Dimension(0, 0), minimum);
+        assertEquals(915, collapsed.width, "a collapsed frame is clamped on both axes");
+        assertEquals(700, collapsed.height, "a collapsed frame is clamped on both axes");
+    }
+
+    // ================================================================== threshold spinner bound (P3-12 follow-up)
+
+    /**
+     * The model is a seam for the same reason {@link clampedFrameSize} is: both threshold spinners
+     * are built inside {@code initComponents}, which sits in the generated half of a frame that
+     * cannot be constructed headless. Pinning the model is what keeps the spinner's declared range
+     * and the code format's bound from drifting apart.
+     */
+    @Test
+    @DisplayName("the threshold spinner offers the range the code format can carry")
+    void thresholdSpinnerModelSpansTheCodeBound() {
+        SpinnerNumberModel model = ReactorPlannerFrame.automationThresholdModel(9000);
+        assertEquals("0", String.valueOf(model.getMinimum()), "the floor");
+        assertEquals(
+                String.valueOf(Reactor.MAX_AUTOMATION_THRESHOLD),
+                String.valueOf(model.getMaximum()),
+                "the writer's bound, not Reactor.MAX_COMPONENT_HEAT");
+        assertEquals("1", String.valueOf(model.getStepSize()), "one at a time");
+        JSpinner spinner = new JSpinner();
+        spinner.setModel(model);
+        assertEquals("9000", String.valueOf(spinner.getValue()), "the default threshold");
+        spinner.setValue(Reactor.MAX_AUTOMATION_THRESHOLD);
+        assertEquals(
+                String.valueOf(Reactor.MAX_AUTOMATION_THRESHOLD),
+                String.valueOf(spinner.getValue()),
+                "the largest encodable threshold is displayable");
+        assertTrue(
+                Reactor.MAX_AUTOMATION_THRESHOLD > Reactor.MAX_COMPONENT_HEAT,
+                "the spinner used to stop below a value a rev-4 code can legitimately carry");
+    }
+
+    /**
+     * The remaining spinners whose range is a code bound, reached through the same kind of seam for
+     * the same reason: they are built inside {@code initComponents}, in the generated half of a
+     * frame that cannot be constructed headless. A control whose range is not its field's bound is
+     * a silent mismatch in both directions — one that stops short hides values a saved code already
+     * carries, one that runs past it offers values {@code getCode()} would refuse.
+     */
+    @Test
+    @DisplayName("every bounded spinner declares the range its code field carries")
+    void boundedSpinnersDeclareTheCodeBounds() {
+        SpinnerNumberModel pulse = ReactorPlannerFrame.pulseDurationModel(0);
+        SpinnerNumberModel temperature = ReactorPlannerFrame.temperatureModel(0);
+        SpinnerNumberModel ticks = ReactorPlannerFrame.tickLimitModel(0);
+        SpinnerNumberModel pause = ReactorPlannerFrame.pauseModel(0);
+
+        assertEquals(
+                String.valueOf(Reactor.MAX_PULSE_DURATION),
+                String.valueOf(pulse.getMaximum()),
+                "the pulse durations");
+        assertEquals(
+                String.valueOf(Reactor.CODE_TEMP_BOUND),
+                String.valueOf(temperature.getMaximum()),
+                "the suspend and resume temperatures");
+        assertEquals(
+                String.valueOf(Reactor.MAX_SIMULATION_TICKS),
+                String.valueOf(ticks.getMaximum()),
+                "the tick limit");
+        assertEquals(
+                String.valueOf(Reactor.MAX_REACTOR_PAUSE),
+                String.valueOf(pause.getMaximum()),
+                "the reactor pause");
+
+        SpinnerNumberModel[] everyModel = {pulse, temperature, ticks, pause};
+        for (SpinnerNumberModel model : everyModel) {
+            assertEquals("0", String.valueOf(model.getMinimum()), "every bounded field starts at zero");
+            assertEquals("1", String.valueOf(model.getStepSize()), "one at a time");
+        }
+    }
+
+    /**
+     * The pause bound is now one number shared by three layers: the spinner offers it, the
+     * component setter accepts it, and the code writer stores with it. Pinning the setter and the
+     * spinner together is what keeps a pause that the GUI can set from being one the next save
+     * cannot write.
+     */
+    @Test
+    @DisplayName("the pause spinner and the component setter agree on the pause bound")
+    void pauseBoundIsSharedWithTheSetter() {
+        SpinnerNumberModel model = ReactorPlannerFrame.pauseModel(0);
+        ReactorItem cell = ComponentFactory.createComponent("coolantCell60k");
+
+        cell.setReactorPause(Reactor.MAX_REACTOR_PAUSE);
+        assertEquals(
+                String.valueOf(Reactor.MAX_REACTOR_PAUSE),
+                String.valueOf(cell.getReactorPause()),
+                "the bound is accepted by the setter");
+        assertEquals(
+                String.valueOf(Reactor.MAX_REACTOR_PAUSE),
+                String.valueOf(model.getMaximum()),
+                "and offered by the spinner");
+        cell.setReactorPause(Reactor.MAX_REACTOR_PAUSE + 1);
+        assertEquals(
+                String.valueOf(Reactor.MAX_REACTOR_PAUSE),
+                String.valueOf(cell.getReactorPause()),
+                "one past is refused, so the writer never sees an out-of-range pause");
     }
 
     // ================================================================== resource bundle

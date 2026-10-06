@@ -16,7 +16,11 @@ import static Ic2ExpReactorPlanner.BundleHelper.getI18n;
  */
 public class Reflector extends ReactorItem {
 
-    private static String mcVersion = "1.12.2";
+    // P3-11: written on the EDT (ReactorPlannerFrame.java:2356) and read from the simulation thread
+    // through getMaxDamage(), which AutomationSimulator.java:160, :293, :485-488 and :809 all call.
+    // volatile is what makes a mid-run change visible at all; it is read once per call, so a run that
+    // spans a change still mixes both versions' damage values.
+    private static volatile String mcVersion = "1.12.2";
 
     public Reflector(
             final int id,
