@@ -54,8 +54,12 @@ public class ReactorItem {
         return automationThreshold;
     }
 
+    // Only bounded below. The field is compared against current heat on one automation path and
+    // against current damage on another, so it has no single meaningful upper bound, and a rev-4
+    // code legitimately carries a threshold up to 1e9 (the writer stores it with that bound).
+    // No code reader or GUI spinner can produce a negative today, so the guard is insurance.
     public void setAutomationThreshold(final int value) {
-        if (maxHeat > 1 || maxDamage > 1) {
+        if ((maxHeat > 1 || maxDamage > 1) && value >= 0) {
             automationThreshold = value;
         }
     }
@@ -66,8 +70,13 @@ public class ReactorItem {
         return reactorPause;
     }
 
+    // Bounded to the range the reactor code can carry: the writer stores the pause with a bound of
+    // 10e3, the reader extracts it with the same bound, and the GUI spinner offers the same range.
+    // A legacy code applies its 'p' parameter with no bound at all, so refusing here is what keeps
+    // an out-of-range pause from making getCode() throw and from pausing a simulated run forever.
+    // Refuse rather than clamp, matching setInitialHeat above.
     public void setReactorPause(final int value) {
-        if (maxHeat > 1 || maxDamage > 1) {
+        if ((maxHeat > 1 || maxDamage > 1) && value >= 0 && value <= (int) 10e3) {
             reactorPause = value;
         }
     }

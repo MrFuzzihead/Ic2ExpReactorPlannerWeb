@@ -19,9 +19,9 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (10 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (11 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **496** |
+| **Covered by an automated regression test**  | **499** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -37,7 +37,7 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -877,12 +877,63 @@ dialog, so a failing test cannot leave warnings silently discarded for the rest 
 P1-2. Low impact in practice since the simulation runs on a separate `Reactor`, but the map
 rebuild is a genuinely visible risk.
 
-### P3-12 🔍 `ReactorItem.setAutomationThreshold` / `setReactorPause` accept any value
+### P3-12 ✅ FIXED 🔍 `ReactorItem.setAutomationThreshold` / `setReactorPause` accept any value
 
 `ReactorItem.java` — no clamping, despite spinners bounding them to
 `[0, Reactor.MAX_COMPONENT_HEAT]` and `[0, 10e3]`. A code carrying a negative or
 out-of-range threshold is honored, and `handleAutomation()` compares against it directly.
 Consider clamping on read.
+
+#### ✅ Applied — split in half, because the two halves are not the same problem
+
+**The review's suggested bound is wrong for the threshold, and the pause is the real bug.**
+Measured before changing anything:
+
+| probe | result |
+|---|---|
+| `setAutomationThreshold(5e8)` → `getCode()` → `setCode()` | **exact** — 40 000, 1 000 000, 1 080 000, 2 000 000 and 5e8 all round-trip |
+| `setReactorPause(500_000)` → `getCode()` | **throws** a bare `IllegalArgumentException` from `BigintStorage.store` (`Reactor.java:758`, bound `(int) 10e3`) |
+| legacy code `(p100000)` | loads **pause = 60 466 176** and the simulation honours it (`pauseTimer = max(pauseTimer, pause)`) → the design runs to the tick cap and reads as safe |
+| legacy code `(p7rk)` | pause = 10 064 — already past the spinner/format bound, loads fine |
+| a negative from any reader | **unreachable**: the legacy regex is `[0-9A-Za-z(),|]+` (no `-`), `BigintStorage.extract` is non-negative by construction, and every spinner is bounded |
+
+**`automationThreshold` is bounded only below.** It is compared against current heat on one
+automation path (`AutomationSimulator:746-759`) and against current damage on another
+(`AutomationSimulator:773`, guarded by `maxDamage > 1`), so the field serves two scales and has
+**no single meaningful upper bound**. A rev-4 code legitimately carries a threshold up to 1e9 —
+the writer stores it with that bound — so clamping to `Reactor.MAX_COMPONENT_HEAT` (1.08e6) would
+silently rewrite legitimate values, and a threshold above a component's own capacity is coherent
+intent ("never automate this part"). Only the lower bound is applied, and it is recorded as
+**latent insurance**: no reader or spinner can produce a negative today.
+
+**`reactorPause` is bounded to `[0, 10e3]`, and that bound is unambiguous** — the writer
+(`store(pause, (int) 10e3)`), the reader (`extract((int) 10e3)`) and the GUI spinner
+(`SpinnerNumberModel(0, 0, 10000, 1)`) all agree on it. The legacy reader applies its `p`
+parameter with **no bound at all** (`Reactor.java:434-441`), which is what makes the hazard live.
+
+```java
+if ((maxHeat > 1 || maxDamage > 1) && value >= 0) {
+    automationThreshold = value;
+}
+...
+if ((maxHeat > 1 || maxDamage > 1) && value >= 0 && value <= (int) 10e3) {
+    reactorPause = value;
+}
+```
+
+**Refused rather than clamped**, mirroring `setInitialHeat` in the same file (`value >= 0 && value < maxHeat`
+also refuses). Refusing keeps the getter/setter pair symmetric and keeps every stored value in range,
+which is what kills both the `getCode()` throw and the 60-million-tick pause; clamping would invent a
+value the user never asked for.
+
+| mutation | result |
+|---|---|
+| drop the pause bound entirely (the shipped bug) | **1 failed** — `pauseBeyondTheCodeBoundIsRefused` |
+| clamp instead of refusing (`Math.max(0, Math.min(value, (int) 10e3))`) | **1 failed** — the same test, at "not clamped down to it" / "not clamped up to zero", so the test pins *refuse*, not merely *bound* |
+| drop the threshold lower bound | **1 failed** — `thresholdIsBoundedOnlyBelow` |
+| corpus after the fix | **0 of 304 designs move** — every corpus threshold is `random.nextInt(60_000)` or `2000`, and no corpus design sets a pause |
+
+Suite is now **499 passed / 0 failed** (two tests added).
 
 ### P3-13 ✅ FIXED 🆕 `Vent.getVentCoolingCapacity()` dereferences `parent` without a null check
 
@@ -1088,7 +1139,9 @@ design as safe".
    ~~`catch (Throwable)`~~ (P3-4), ~~the overfill refusal~~ (P3-15), ~~the `CoolantCell` sign
    guard~~ (P3-6), ~~the `Vent` null `parent`~~ (P3-13) and ~~the `getMaterials()` null recipe~~
    (P3-9) are **done**; P3-16 is **retracted** (the pass-through is the game's rule, and relaxing
-   it makes 4/304 designs look safe).
+   it makes 4/304 designs look safe). ~~the setter bounds~~ (P3-12) are **done** — the pause is
+   bounded to the range the code format can carry, the threshold only below, since it serves the
+   heat and the damage scale at once.
    Remaining in this item: the stale `lastEUoutput` and `plannerResized`.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge.
@@ -1327,3 +1380,8 @@ fails. Two practical warnings, both learned the hard way:
   (or install a listener) and render that exception.
 * **`TextureFactory` is only covered** by the fact that every component has a non-null image.
   The texture-pack fallback-name asymmetry in P3-8 needs a real pack to exercise.
+* **The GUI spinner bound is smaller than the code format's.** `thresholdSpinner` is a
+  `SpinnerNumberModel(9000, 0, Reactor.MAX_COMPONENT_HEAT, 1)` (1.08e6), but a rev-4 code carries
+  a threshold up to 1e9 and round-trips it exactly, so `thresholdSpinner.setValue(component.getAutomationThreshold())`
+  (`ReactorPlannerFrame.java:195/196`) can be handed a legitimate value the model rejects. P3-12
+  deliberately did *not* clamp the data to the spinner bound; the fix is to widen the model.

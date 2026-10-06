@@ -143,6 +143,45 @@ class ReactorItemTest {
                 assertEquals(0, item.getReactorPause(), baseName + " is inert");
             }
         }
+
+        @Test
+        @DisplayName("a pause beyond the reactor code's bound is refused")
+        void pauseBeyondTheCodeBoundIsRefused() {
+            Reactor reactor = new Reactor();
+            reactor.setAutomated(true);
+            ReactorItem cell = place(reactor, 2, 2, "coolantCell60k");
+
+            cell.setReactorPause((int) 10e3);
+            assertEquals((int) 10e3, cell.getReactorPause(), "the spinner's own maximum is accepted");
+            cell.setReactorPause(500);
+            assertEquals(500, cell.getReactorPause(), "an ordinary value is accepted");
+            cell.setReactorPause((int) 10e3 + 1);
+            assertEquals(500, cell.getReactorPause(), "one past the bound is refused, not clamped down to it");
+            cell.setReactorPause(-1);
+            assertEquals(500, cell.getReactorPause(), "a negative is refused, not clamped up to zero");
+
+            // The writer stores the pause with a bound of 10e3, so an out-of-range value would make
+            // getCode() throw a bare IllegalArgumentException. Keeping the stored value in range is
+            // what makes the round-trip below possible at all (CODE_REVIEW.md P3-12).
+            String code = reactor.getCode();
+            Reactor back = new Reactor();
+            back.setCode(code);
+            assertEquals(500, back.getComponentAt(2, 2).getReactorPause(), "pause survives the code");
+        }
+
+        @Test
+        @DisplayName("a threshold is bounded only below")
+        void thresholdIsBoundedOnlyBelow() {
+            ReactorItem item = ComponentFactory.createComponent("coolantCell60k");
+
+            item.setAutomationThreshold(500_000_000);
+            assertEquals(
+                    500_000_000,
+                    item.getAutomationThreshold(),
+                    "a rev-4 code legitimately carries a threshold above the component's capacity");
+            item.setAutomationThreshold(-1);
+            assertEquals(500_000_000, item.getAutomationThreshold(), "a negative is refused");
+        }
     }
 
     // ================================================================== heat clamping
