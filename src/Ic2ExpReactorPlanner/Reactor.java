@@ -155,8 +155,18 @@ public class Reactor {
         MaterialsList result = new MaterialsList();
         for (int col = 0; col < grid[0].length; col++) {
             for (int row = 0; row < grid.length; row++) {
-                if (getComponentAt(row, col) != null) {
-                    result.add(MaterialsList.getMaterialsForComponent(getComponentAt(row, col)));
+                ReactorItem component = getComponentAt(row, col);
+                if (component != null) {
+                    // getMaterialsForComponent returns null for a baseName with no recipe entry.
+                    // MaterialsList.add rejects a null element outright, which is the right error
+                    // for a genuine misuse but the wrong one here: a component the planner has no
+                    // recipe for simply contributes nothing to the shopping list. All 72 factory
+                    // components have entries today, so this is a trap guard, not a live path.
+                    // See CODE_REVIEW.md P3-9.
+                    MaterialsList recipe = MaterialsList.getMaterialsForComponent(component);
+                    if (recipe != null) {
+                        result.add(recipe);
+                    }
                 }
             }
         }

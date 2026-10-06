@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import Ic2ExpReactorPlanner.components.ReactorItem;
+import Ic2ExpReactorPlanner.components.Vent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -347,6 +348,28 @@ class ReactorTest {
                 reactor.setComponentAt(2, 2, item);
                 assertNotNull(reactor.getMaterials(), item.baseName + " produced no materials list");
             }
+        }
+
+        /**
+         * CODE_REVIEW.md P3-9: {@code getMaterialsForComponent} returns null for a baseName with
+         * no recipe entry, and {@code MaterialsList.add} rejects a null element outright -- that
+         * is the right error for a genuine misuse, but not for this call. {@code getMaterials()}
+         * now skips the missing recipe, so an unbuildable component leaves nothing on the
+         * shopping list rather than crashing the GUI. Every factory component has an entry, so
+         * the guard is a trap rather than a live path, and the test has to build one by hand.
+         */
+        @Test
+        @DisplayName("a component with no recipe entry is skipped rather than crashing")
+        void unknownComponentIsSkipped() {
+            Vent orphan = new Vent(99, "noSuchComponent", "Orphan", null, 1, 1, null, 0, 0, 4);
+            assertNull(
+                    MaterialsList.getMaterialsForComponent(orphan), "the recipe lookup misses");
+            Reactor reactor = new Reactor();
+            reactor.setComponentAt(2, 2, orphan);
+            assertEquals(
+                    new Reactor().getMaterials().toString(),
+                    reactor.getMaterials().toString(),
+                    "and the empty shopping list is unchanged");
         }
     }
 

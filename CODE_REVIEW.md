@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (9 fixed, 1 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (10 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **496** |
 
@@ -37,7 +37,7 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard and P3-13 the `Vent` null `parent` guard — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -814,13 +814,47 @@ branch only `imageNames[0]`. Asymmetric: a texture whose first name is absent fr
 but whose second name is present will silently render blank. Make both branches iterate the
 full list.
 
-### P3-9 🔍 `MaterialsList.getMaterialsForComponent` can return `null` → `NullPointerException`
+### P3-9 ✅ FIXED 🔍 `MaterialsList.getMaterialsForComponent` can return `null` → `NullPointerException`
 
 Verified all **72 components have entries (0 missing)**, so this is latent, not live. But
 `Reactor.getMaterials()` does `result.add(getMaterialsForComponent(...))` with no null
 check, and `add(Object...)` throws `NullPointerException` on a null element. Adding a
 component without a recipe entry crashes the GUI; a null guard turns it into a missing
 ingredient.
+
+#### ✅ Applied and verified
+
+Guarded **at the call site**, leaving both the producer and `add()` untouched:
+
+```java
+ReactorItem component = getComponentAt(row, col);
+if (component != null) {
+    MaterialsList recipe = MaterialsList.getMaterialsForComponent(component);
+    if (recipe != null) {
+        result.add(recipe);
+    }
+}
+```
+
+(The old code called `getComponentAt(row, col)` twice for the same cell; the local is what the
+guard needs, so the double lookup disappears with it.)
+
+**The guard location is pinned, not chosen by taste.** The obvious alternative — swallow the null
+inside `add(Object...)` — breaks an existing test: `MaterialsListTest.aggregation`, "a null material
+throws a NullPointerException naming the arguments". `add()`'s strictness is deliberate and already
+asserted, so the only place the guard can go is the one caller that has no recipe. `getMaterialsForComponent`
+keeps returning `null` as the honest "no entry" signal for callers that want to ask.
+
+The new test has to build an unbuildable component by hand (`new Vent(99, "noSuchComponent", ...)`)
+because every factory component has an entry — which is itself the pin on "0 missing".
+
+| mutation | result |
+|---|---|
+| make the guard always true (the unguarded original) | **1 failed** — `ReactorTest.unknownComponentIsSkipped`, at the `getMaterials()` line |
+| move the guard into `add()` instead (swallow nulls) | **1 failed** — `MaterialsListTest.aggregation`, i.e. the alternative fix is rejected by an existing assertion |
+| corpus after the fix | **0 of 304 designs move** — `getMaterials()` is not in the corpus fingerprint, and no design has a missing recipe |
+
+Suite is now **497 passed / 0 failed** (one test added).
 
 ### P3-10 ✅ FIXED 🔍 `handleTaloniusCode` threw `HeadlessException` out of `setCode`
 
@@ -1052,7 +1086,8 @@ design as safe".
 7. ~~**P2-3** minor sweep~~ — **done and verified**; see above. (c) and (e) retracted as false positives.
 8. **P3 sweep** — ~~`needsCooldown`~~ (P3-1), ~~the dead `GGFuelRod` members~~ (P3-5),
    ~~`catch (Throwable)`~~ (P3-4), ~~the overfill refusal~~ (P3-15), ~~the `CoolantCell` sign
-   guard~~ (P3-6) and ~~the `Vent` null `parent`~~ (P3-13) are **done**; P3-16 is **retracted** (the pass-through is the game's rule, and relaxing
+   guard~~ (P3-6), ~~the `Vent` null `parent`~~ (P3-13) and ~~the `getMaterials()` null recipe~~
+   (P3-9) are **done**; P3-16 is **retracted** (the pass-through is the game's rule, and relaxing
    it makes 4/304 designs look safe).
    Remaining in this item: the stale `lastEUoutput` and `plannerResized`.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
