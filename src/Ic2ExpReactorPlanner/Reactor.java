@@ -50,6 +50,17 @@ public class Reactor {
 
     private int resumeTemp = DEFAULT_RESUME_TEMP;
 
+    // The largest value the suspend/resume code fields can carry. Derived rather than copied: the
+    // store/extract bound has to be able to hold either field's own default, so once the two
+    // defaults diverge the bound follows the larger of them. Declared after both defaults because
+    // a field initializer reads them in declaration order.
+    private static final int CODE_TEMP_BOUND = Math.max(DEFAULT_SUSPEND_TEMP, DEFAULT_RESUME_TEMP);
+
+    // The largest value the current-heat code field can carry. It shares the number above by
+    // coincidence, not by design: this bounds a stored heat, not a default temperature, and it is
+    // unrelated to MAX_COMPONENT_HEAT.
+    private static final int CODE_HEAT_BOUND = (int) 120e3;
+
     private int maxSimulationTicks = (int) 5e6;
 
     // maximum paramatter types for a reactor component (current initial heat, automation threshold, reactor pause
@@ -414,12 +425,12 @@ public class Reactor {
         // holding a value that makes the *next* getCode() throw from BigintStorage.store, so a
         // code we could not faithfully re-encode is refused here instead.
         if (haveCurrentHeat) {
-            requireEncodable("current heat", newCurrentHeat, (int) 120e3);
+            requireEncodable("current heat", newCurrentHeat, CODE_HEAT_BOUND);
         }
         requireEncodable("on-pulse", newOnPulse, (int) 5e6);
         requireEncodable("off-pulse", newOffPulse, (int) 5e6);
-        requireEncodable("suspend temperature", newSuspendTemp, (int) 120e3);
-        requireEncodable("resume temperature", newResumeTemp, (int) 120e3);
+        requireEncodable("suspend temperature", newSuspendTemp, CODE_TEMP_BOUND);
+        requireEncodable("resume temperature", newResumeTemp, CODE_TEMP_BOUND);
         if (newOnPulse + newOffPulse > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("the pulse durations overflow");
         }
@@ -689,7 +700,7 @@ public class Reactor {
         }
 
         // next, read the initial temperature and other details.
-        int newCurrentHeat = storage.extract((int) 120e3);
+        int newCurrentHeat = storage.extract(CODE_HEAT_BOUND);
         int newOnPulse = onPulse;
         int newOffPulse = offPulse;
         int newSuspendTemp = suspendTemp;
@@ -697,8 +708,8 @@ public class Reactor {
         if (codeRevision == 0 || newPulsed) {
             newOnPulse = storage.extract((int) 5e6);
             newOffPulse = storage.extract((int) 5e6);
-            newSuspendTemp = storage.extract((int) 120e3);
-            newResumeTemp = storage.extract((int) 120e3);
+            newSuspendTemp = storage.extract(CODE_TEMP_BOUND);
+            newResumeTemp = storage.extract(CODE_TEMP_BOUND);
         }
         boolean newFluid = storage.extract(1) > 0;
         boolean newInjectors = storage.extract(1) > 0;
@@ -735,12 +746,12 @@ public class Reactor {
         storage.store(usingReactorCoolantInjectors ? 1 : 0, 1);
         storage.store(fluid ? 1 : 0, 1);
         if (pulsed) {
-            storage.store(resumeTemp, (int) 120e3);
-            storage.store(suspendTemp, (int) 120e3);
+            storage.store(resumeTemp, CODE_TEMP_BOUND);
+            storage.store(suspendTemp, CODE_TEMP_BOUND);
             storage.store(offPulse, (int) 5e6);
             storage.store(onPulse, (int) 5e6);
         }
-        storage.store((int) currentHeat, (int) 120e3);
+        storage.store((int) currentHeat, CODE_HEAT_BOUND);
         // grid is read (almost) first, so written (almost) last, and in reverse order
         for (int row = grid.length - 1; row >= 0; row--) {
             for (int col = grid[row].length - 1; col >= 0; col--) {

@@ -712,10 +712,43 @@ resume temp is suppressed against its own default`. So the constant bump is not 
 discriminating, and it is the assertion written for this fix. The guard is therefore correct and
 inert until someone changes one of the two constants.
 
-**Related, not fixed here:** `Reactor.java:728-729` store the same pair through
-`storage.store(resumeTemp, (int) 120e3)` with a **literal** rather than the constant, so the
-binary code path carries the same latent coupling a third time. Worth a follow-up so the three
-sites read one constant.
+**Follow-up applied — the code-format bound now derives from the constants.** The literals are
+gone. Two named bounds sit next to the defaults they belong to:
+
+```java
+private static final int CODE_TEMP_BOUND = Math.max(DEFAULT_SUSPEND_TEMP, DEFAULT_RESUME_TEMP);
+private static final int CODE_HEAT_BOUND = (int) 120e3;
+```
+
+`CODE_TEMP_BOUND` replaces the bare `(int) 120e3` at the six suspend/resume sites — `requireEncodable`
+`:421/:422`, `extract` `:700/:701`, `store` `:738/:739` — and `max()` rather than either constant
+alone, because the bound has to be able to hold **either** field's own default once the two diverge.
+`CODE_HEAT_BOUND` replaces the three current-heat spellings (`:417`, `:692`, `store :743`): same
+number, different field — it bounds a stored heat, not a default temperature, and it is unrelated
+to `MAX_COMPONENT_HEAT` (1 080 000). Naming it is the point: the two bounds used to be
+indistinguishable at the call site, and a reader who assumed they were the same one would have
+been wrong.
+
+1. **Inert today**: suite **502 passed / 0 failed / 0 skipped**, corpus **0 of 304** — the constants
+   are still equal, so no value can tell the spellings apart.
+2. **The bump is the isolation, and it is decisive.** `DEFAULT_RESUME_TEMP` moved to `130e3`:
+
+   | tree | failures |
+   |---|---|
+   | derived bound (this fix), bump applied | **3** — the two tests that hardcode `120 000` as a default, plus `an out-of-range on-pulse or temperature is refused too`, which now *accepts* the value the widened bound admits |
+   | literals (fix reverted), bump applied | **17** |
+
+   The `comm` is those **14 tests that fail only under the literals**: `buildCodeString` stores
+   `resumeTemp = 130e3` against the literal `120e3` bound, `BigintStorage.store` throws, and `getCode()`
+   is broken for every pulsed reactor — `CorpusBaselineTest > initializationError` and the whole
+   round-trip family among them. The derived bound follows the constant and none of that fallout
+   happens. That is the measured proof that the six sites read the constant rather than the number.
+3. **Mutation table: not caught — expected.** With the constants equal the green run is not evidence;
+   same status as P3-3's guard and P3-12's threshold bound.
+
+**Left alone deliberately:** `ReactorPlannerFrame.java:736/755` bound the suspend/resume spinners at
+a literal `120000`. Same number, different concern — that is the GUI bound, the P3-12 spinner family
+and a product decision, and mixing a display bound into a serialization commit would blur the two.
 
 ### P3-4 ✅ FIXED — `catch (Throwable e)` in `doInBackground`
 
@@ -1211,7 +1244,8 @@ design as safe".
    ~~the stale `lastEUoutput`~~ (P3-2) is **done** — the pair is dead, not merely idempotent.
    Remaining in this item: `plannerResized` (P3-7).
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
-   an assertion that only bites once the two constants diverge.
+   an assertion that only bites once the two constants diverge. The code-format bound follow-up is
+   **done** too — see P3-3.
 
 ## Testing
 
