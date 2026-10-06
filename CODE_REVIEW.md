@@ -1219,6 +1219,37 @@ value the user never asked for.
 
 Suite is now **499 passed / 0 failed** (two tests added).
 
+#### P3-12 follow-up #2 ✅ CLOSED — the other spinner bounds name the code's constants
+
+The threshold spinner was not the only control whose range was spelled as a bare literal. `initComponents`
+declares seven more models inline — `5000000` twice for the pulse durations, `120000` twice for the
+suspend/resume temperatures, `10000` twice for the pause, `5000000` for the tick limit — and the same
+numbers appear again at ten sites in `Reactor.java`'s writer, reader and `requireEncodable` guards,
+and at one in the component setter.
+Every one of them agreed with the format today; the threshold spinner in P3-12 was the one that had
+drifted, and nothing structural stopped the others from drifting later.
+
+Named once in `Reactor.java` — `MAX_PULSE_DURATION`, `MAX_SIMULATION_TICKS`, `MAX_REACTOR_PAUSE`, and
+`CODE_TEMP_BOUND` made public — and reached from the frame through four static factories
+(`pulseDurationModel`, `temperatureModel`, `tickLimitModel`, `pauseModel`) alongside
+`automationThresholdModel`. `initComponents` calls the factories where it used to build models inline;
+the models are identical, so no behaviour changes and no corpus design moves.
+
+**What is pinned, and what still is not.** The factories and the setter are pinned: a spinner factory
+that names a different bound fails, and a setter bound that stops being the shared constant fails.
+The call sites inside `initComponents` remain **not observable** — the frame cannot be constructed
+headlessly, so a frame that ignored the factory and built its own model again would still pass. Same
+status as the two lines of P3-7 and the `volatile` half of P1-2; recorded rather than hidden.
+
+| mutation | result |
+|---|---|
+| `pauseModel` bound → `Reactor.MAX_COMPONENT_HEAT` | **2 failed** — `boundedSpinnersDeclareTheCodeBounds`, `pauseBoundIsSharedWithTheSetter` |
+| `setReactorPause` bound → literal `(int) 5e3`, no longer the constant | **2 failed** — `pauseBoundIsSharedWithTheSetter`, `pauseBeyondTheCodeBoundIsRefused` |
+| writer `store(maxSimulationTicks, MAX_SIMULATION_TICKS)` → `(int) 1e6` | **53 failed** — incl. `writerBoundsRoundTrip` and the corpus gate, which fails at initialization |
+| corpus after the fix | **0 of 304 designs move** — the bounds are the same numbers, only named |
+
+Suite is now **525 passed / 0 failed** (two tests added to `ReactorPlannerFrameMappingTest`).
+
 ### P3-13 ✅ FIXED 🆕 `Vent.getVentCoolingCapacity()` dereferences `parent` without a null check
 
 **File:** `src/Ic2ExpReactorPlanner/components/Vent.java:92`
@@ -1589,7 +1620,7 @@ design as safe".
 
 ## Testing
 
-A 523-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 525-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -1781,7 +1812,7 @@ reading the text. Any new test asserting on report text must do the same.
 The suite was validated by mutation testing: 13 bugs injected into `src/` one at a time, with
 `src/` restored after each. **All 13 were caught.** Re-run after each fix, all were still caught; 14 further rows were
 added as the fixes landed — single-tier partial reverts, the over-correction, four P0-2 variants,
-the P1-1 parsing cases, and the P1-3 cancel-path cases, and the three code-bound cases above. A full run takes about 20 seconds.
+the P1-1 parsing cases, and the P1-3 cancel-path cases, and the code-bound and spinner-bound cases above. A full run takes about 20 seconds.
 
 | Injected bug | Result |
 |---|---|
@@ -1801,6 +1832,9 @@ the P1-1 parsing cases, and the P1-3 cancel-path cases, and the three code-bound
 | Code reader: `extract(CODE_HEAT_BOUND)` → `extract(60e3)` | 40 failed (incl. `writerBoundsRoundTrip`) |
 | Code writer: `store(currentHeat, CODE_HEAT_BOUND)` → `store(…, 240e3)` | 41 failed (incl. `onePastEachWriterBoundIsRefused`) |
 | `ReactorItem.setInitialHeat`: refuse → clamp at `maxHeat` | 5 failed (incl. `aRefusedComponentFieldStillLandsOnAWritableDesign`) |
+| `ReactorPlannerFrame.pauseModel`: bound → `MAX_COMPONENT_HEAT` | 2 failed |
+| `ReactorItem.setReactorPause`: bound → literal `5e3` | 2 failed |
+| `Reactor` writer: tick bound → `(int) 1e6` | 53 failed (incl. the corpus gate) |
 | P0-1 revert: any single cascade tier back to `switchSide` | 3 × failed |
 | P0-1 over-correction: the *side* block switched too | failed |
 | P0-2 reverted to the old bound | failed |
@@ -1849,6 +1883,10 @@ fails. Two practical warnings, both learned the hard way:
   (`clampedFrameSize`). The generated Swing in `initComponents` (~2 400 lines) remains untested,
   and the two lines of P3-7 that honour the clamp's `null` sit in that untested half — the frame
   cannot even be constructed headlessly (`java.awt.HeadlessException` from `java.awt.Window.<init>`).
+  **Partly closed** since: the eight spinner models `initComponents` builds are now reached through
+  factories (`automationThresholdModel`, `pulseDurationModel`, `temperatureModel`, `tickLimitModel`,
+  `pauseModel`) and pinned against the code's own bounds, so the *ranges* of the generated Swing are
+  tested even though its wiring is not — see P3-12 follow-up #2.
 * ~~**No fuzz or property test on `Reactor.setCode` — and no bound coverage in it.**~~ **Closed** on
   both counts: `ReactorCodeFuzzTest` covers atomicity (1 598 generated mutations) *and*, since the
   bound families above were added, the reader/writer bound mismatches — every bounded reactor-level

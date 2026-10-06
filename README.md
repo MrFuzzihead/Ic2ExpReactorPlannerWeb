@@ -33,7 +33,7 @@ Development
 ./gradlew test --tests '*FuelRodTest'           # one class or nested class
 ```
 
-The suite is 523 JUnit 5 tests and runs headless in about 20 seconds. It covers the component
+The suite is 525 JUnit 5 tests and runs headless in about 20 seconds. It covers the component
 calculation logic, the tick simulation loop, and reactor code serialization. Two things are
 worth knowing before you change a formula:
 
@@ -49,6 +49,10 @@ worth knowing before you change a formula:
 * **`ReactorCodeFuzzTest` generates its inputs.** It mutates one populated design ~1 600 ways and
   asserts `setCode` is atomic, and it walks every bounded code field at its bound and one past it.
   A new bounded field belongs in that table, not in a hand-written case.
+* **Each code field has one bound constant.** `Reactor.MAX_PULSE_DURATION`, `MAX_SIMULATION_TICKS`,
+  `MAX_REACTOR_PAUSE`, `CODE_TEMP_BOUND`, `CODE_HEAT_BOUND` and `MAX_AUTOMATION_THRESHOLD` are shared
+  by the writer, the reader, the component setters and the GUI spinners. A bound change belongs there,
+  not at the 18 places that used to spell the same number as a literal.
 
 ### The simulation corpus
 

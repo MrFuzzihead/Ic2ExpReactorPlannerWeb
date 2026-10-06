@@ -80,7 +80,7 @@ public class ReactorItem {
     // an out-of-range pause from making getCode() throw and from pausing a simulated run forever.
     // Refuse rather than clamp, matching setInitialHeat above.
     public void setReactorPause(final int value) {
-        if ((maxHeat > 1 || maxDamage > 1) && value >= 0 && value <= (int) 10e3) {
+        if ((maxHeat > 1 || maxDamage > 1) && value >= 0 && value <= Reactor.MAX_REACTOR_PAUSE) {
             reactorPause = value;
         }
     }

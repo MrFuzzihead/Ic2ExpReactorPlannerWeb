@@ -1,7 +1,7 @@
 # Release notes — 2.5.2-GTNH
 
 Everything since tag `2.5.1-GTNH` (`26dba79` "fix breedercell", 2023-01-31): **32 commits**.
-Suite at HEAD: **523 JUnit 5 tests, 0 failed, 0 skipped**. Corpus gate: **304 designs** in
+Suite at HEAD: **525 JUnit 5 tests, 0 failed, 0 skipped**. Corpus gate: **304 designs** in
 `testResources/corpus-baseline.txt`, all matching.
 
 The full audit trail for every line below is [`CODE_REVIEW.md`](CODE_REVIEW.md).
@@ -80,13 +80,21 @@ No corpus design moved for any of these — they change iteration cost, not arit
 
 ## 5. Test suite and corpus
 
-* Suite grew **458 → 523** tests, and **nothing is skipped any more**. The `Current…`
+* Suite grew **458 → 525** tests, and **nothing is skipped any more**. The `Current…`
   characterisation tests and their `@Disabled` contract tests from Phase 0 are gone: both P0s are
   fixed, so the suite now asserts the intended behaviour directly.
 * **P1-5** added `ReactorCodeFuzzTest`, a deterministic mutation harness over `setCode`: ~1 600
   generated variants of one populated code, each required to end in one of two whole states.
   It now also walks every bounded code field at its bound and one past it, so a reader and writer
   bound that drift apart fails a test instead of reading back a shifted value.
+* Every field the code format bounds now names its limit once — `MAX_PULSE_DURATION`,
+  `MAX_SIMULATION_TICKS`, `MAX_REACTOR_PAUSE`, `CODE_TEMP_BOUND`, `CODE_HEAT_BOUND`,
+  `MAX_AUTOMATION_THRESHOLD` — and the writer, the reader, the component setters and the GUI
+  spinners all read that constant instead of spelling the same number as a literal at 18 sites.
+  The spinners are reached through static factories (`pulseDurationModel`, `temperatureModel`,
+  `tickLimitModel`, `pauseModel`), which is what makes their ranges testable. **No number changed,
+  so no design moves** — this is what stops the threshold spinner's kind of drift from happening
+  again rather than fixing a second instance of it.
 * The corpus gate (`CorpusBaselineTest`) is unchanged in mechanism: it fails on any drift and
   reports which designs moved and which component categories they share. It is **green at HEAD**.
 * `TextureFactory`'s texture-pack zip branch is now covered: `getImageFromPack` and
@@ -102,8 +110,11 @@ No corpus design moved for any of these — they change iteration cost, not arit
   a TSAN-style harness. Recorded as *not caught*, not as *verified*.
 * **The generated `initComponents` in `ReactorPlannerFrame` (~2 400 lines) is still largely
   uncovered.** The frame-level tests use static seams (`getCachedIcon`, `setComponentIcon`,
-  `clampedFrameSize`, `automationThresholdModel`) because a `java.awt.Window` cannot be built
-  headless (`java.awt.HeadlessException`).
+  `clampedFrameSize`, `automationThresholdModel`, `pulseDurationModel`, `temperatureModel`,
+  `tickLimitModel`, `pauseModel`) because a `java.awt.Window` cannot be built headless
+  (`java.awt.HeadlessException`). The spinner *ranges* are pinned through those factories now;
+  the wiring is not — a frame that ignored a factory and built its own model again would still
+  pass, and so would a frame that stopped honouring `clampedFrameSize`'s `null`.
 * **Spotless is a no-op offline.** In a checkout where Blowdryer's shared config has not been
   downloaded, `spotlessJava` has an empty target and `spotlessCheck` passes without inspecting
   anything. Run `./gradlew spotlessApply` with network access **before pushing**.
@@ -115,7 +126,7 @@ No corpus design moved for any of these — they change iteration cost, not arit
 Gradle 7.6 will not run on Java 20 or newer, so JDK 8 is required for the suite:
 
 ```bash
-JAVA_HOME="/path/to/jdk-8" ./gradlew test --rerun     # ~21 s, expect 523 passed / 0 failed
+JAVA_HOME="/path/to/jdk-8" ./gradlew test --rerun     # ~21 s, expect 525 passed / 0 failed
 JAVA_HOME="/path/to/jdk-8" ./gradlew assemble         # the jar into build/libs
 ```
 

@@ -53,8 +53,9 @@ public class Reactor {
     // The largest value the suspend/resume code fields can carry. Derived rather than copied: the
     // store/extract bound has to be able to hold either field's own default, so once the two
     // defaults diverge the bound follows the larger of them. Declared after both defaults because
-    // a field initializer reads them in declaration order.
-    private static final int CODE_TEMP_BOUND = Math.max(DEFAULT_SUSPEND_TEMP, DEFAULT_RESUME_TEMP);
+    // a field initializer reads them in declaration order. Public so the GUI spinners that offer
+    // these two fields declare the same range the format carries (CODE_REVIEW.md, spinner bounds).
+    public static final int CODE_TEMP_BOUND = Math.max(DEFAULT_SUSPEND_TEMP, DEFAULT_RESUME_TEMP);
 
     // The largest value the current-heat code field can carry. It shares the number above by
     // coincidence, not by design: this bounds a stored heat, not a default temperature, and it is
@@ -73,6 +74,15 @@ public class Reactor {
     // build writes, so writer and reader agree on this number; the GUI spinner is bounded by it
     // too, which is why the constant is public (CODE_REVIEW.md P3-12 follow-up).
     public static final int MAX_AUTOMATION_THRESHOLD = (int) 1e9;
+
+    // The remaining bounds the code format carries, named once and shared with the GUI spinners
+    // that offer the same fields. They were spelled as bare literals at ten sites here, seven in
+    // the frame and one in the component setter, which is how the threshold spinner came to declare
+    // a maximum nearly a thousand times smaller than the format's (P3-12); naming them makes that
+    // drift impossible rather than merely once-found.
+    public static final int MAX_PULSE_DURATION = (int) 5e6;
+    public static final int MAX_SIMULATION_TICKS = (int) 5e6;
+    public static final int MAX_REACTOR_PAUSE = (int) 10e3;
 
     public ReactorItem getComponentAt(final int row, final int column) {
         if (row >= 0 && row < grid.length && column >= 0 && column < grid[row].length) {
@@ -433,8 +443,8 @@ public class Reactor {
         if (haveCurrentHeat) {
             requireEncodable("current heat", newCurrentHeat, CODE_HEAT_BOUND);
         }
-        requireEncodable("on-pulse", newOnPulse, (int) 5e6);
-        requireEncodable("off-pulse", newOffPulse, (int) 5e6);
+        requireEncodable("on-pulse", newOnPulse, MAX_PULSE_DURATION);
+        requireEncodable("off-pulse", newOffPulse, MAX_PULSE_DURATION);
         requireEncodable("suspend temperature", newSuspendTemp, CODE_TEMP_BOUND);
         requireEncodable("resume temperature", newResumeTemp, CODE_TEMP_BOUND);
         if (newOnPulse + newOffPulse > Integer.MAX_VALUE) {
@@ -691,7 +701,7 @@ public class Reactor {
                     int pause = 0;
                     if (codeRevision == 0 || newAutomated) {
                         threshold = storage.extract(maxComponentHeat);
-                        pause = storage.extract((int) 10e3);
+                        pause = storage.extract(MAX_REACTOR_PAUSE);
                     }
                     if (component != null) {
                         component.setInitialHeat(initialHeat);
@@ -712,8 +722,8 @@ public class Reactor {
         int newSuspendTemp = suspendTemp;
         int newResumeTemp = resumeTemp;
         if (codeRevision == 0 || newPulsed) {
-            newOnPulse = storage.extract((int) 5e6);
-            newOffPulse = storage.extract((int) 5e6);
+            newOnPulse = storage.extract(MAX_PULSE_DURATION);
+            newOffPulse = storage.extract(MAX_PULSE_DURATION);
             newSuspendTemp = storage.extract(CODE_TEMP_BOUND);
             newResumeTemp = storage.extract(CODE_TEMP_BOUND);
         }
@@ -723,7 +733,7 @@ public class Reactor {
             newPulsed = storage.extract(1) > 0;
             newAutomated = storage.extract(1) > 0;
         }
-        int newMaxSimulationTicks = storage.extract((int) 5e6);
+        int newMaxSimulationTicks = storage.extract(MAX_SIMULATION_TICKS);
 
         // Parsing is complete and nothing above has touched the reactor, so from here on nothing
         // can fail and the application is all-or-nothing.
@@ -748,14 +758,14 @@ public class Reactor {
     private String buildCodeString() {
         BigintStorage storage = new BigintStorage();
         // first, store the extra details, in reverse order of expected reading.
-        storage.store(maxSimulationTicks, (int) 5e6);
+        storage.store(maxSimulationTicks, MAX_SIMULATION_TICKS);
         storage.store(usingReactorCoolantInjectors ? 1 : 0, 1);
         storage.store(fluid ? 1 : 0, 1);
         if (pulsed) {
             storage.store(resumeTemp, CODE_TEMP_BOUND);
             storage.store(suspendTemp, CODE_TEMP_BOUND);
-            storage.store(offPulse, (int) 5e6);
-            storage.store(onPulse, (int) 5e6);
+            storage.store(offPulse, MAX_PULSE_DURATION);
+            storage.store(onPulse, MAX_PULSE_DURATION);
         }
         storage.store((int) currentHeat, CODE_HEAT_BOUND);
         // grid is read (almost) first, so written (almost) last, and in reverse order
@@ -772,7 +782,7 @@ public class Reactor {
                             || component.getReactorPause()
                                     != ComponentFactory.getDefaultComponent(id).getReactorPause()) {
                         if (automated) {
-                            storage.store(component.getReactorPause(), (int) 10e3);
+                            storage.store(component.getReactorPause(), MAX_REACTOR_PAUSE);
                             storage.store(component.getAutomationThreshold(), MAX_AUTOMATION_THRESHOLD);
                         }
                         storage.store((int) component.getInitialHeat(), (int) 1e9);

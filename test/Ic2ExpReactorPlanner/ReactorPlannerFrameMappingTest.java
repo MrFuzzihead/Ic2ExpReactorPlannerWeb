@@ -14,6 +14,7 @@ import javax.swing.JButton;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import Ic2ExpReactorPlanner.Reactor;
+import Ic2ExpReactorPlanner.ComponentFactory;
 import Ic2ExpReactorPlanner.components.ReactorItem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -294,6 +295,73 @@ class ReactorPlannerFrameMappingTest {
         assertTrue(
                 Reactor.MAX_AUTOMATION_THRESHOLD > Reactor.MAX_COMPONENT_HEAT,
                 "the spinner used to stop below a value a rev-4 code can legitimately carry");
+    }
+
+    /**
+     * The remaining spinners whose range is a code bound, reached through the same kind of seam for
+     * the same reason: they are built inside {@code initComponents}, in the generated half of a
+     * frame that cannot be constructed headless. A control whose range is not its field's bound is
+     * a silent mismatch in both directions — one that stops short hides values a saved code already
+     * carries, one that runs past it offers values {@code getCode()} would refuse.
+     */
+    @Test
+    @DisplayName("every bounded spinner declares the range its code field carries")
+    void boundedSpinnersDeclareTheCodeBounds() {
+        SpinnerNumberModel pulse = ReactorPlannerFrame.pulseDurationModel(0);
+        SpinnerNumberModel temperature = ReactorPlannerFrame.temperatureModel(0);
+        SpinnerNumberModel ticks = ReactorPlannerFrame.tickLimitModel(0);
+        SpinnerNumberModel pause = ReactorPlannerFrame.pauseModel(0);
+
+        assertEquals(
+                String.valueOf(Reactor.MAX_PULSE_DURATION),
+                String.valueOf(pulse.getMaximum()),
+                "the pulse durations");
+        assertEquals(
+                String.valueOf(Reactor.CODE_TEMP_BOUND),
+                String.valueOf(temperature.getMaximum()),
+                "the suspend and resume temperatures");
+        assertEquals(
+                String.valueOf(Reactor.MAX_SIMULATION_TICKS),
+                String.valueOf(ticks.getMaximum()),
+                "the tick limit");
+        assertEquals(
+                String.valueOf(Reactor.MAX_REACTOR_PAUSE),
+                String.valueOf(pause.getMaximum()),
+                "the reactor pause");
+
+        SpinnerNumberModel[] everyModel = {pulse, temperature, ticks, pause};
+        for (SpinnerNumberModel model : everyModel) {
+            assertEquals("0", String.valueOf(model.getMinimum()), "every bounded field starts at zero");
+            assertEquals("1", String.valueOf(model.getStepSize()), "one at a time");
+        }
+    }
+
+    /**
+     * The pause bound is now one number shared by three layers: the spinner offers it, the
+     * component setter accepts it, and the code writer stores with it. Pinning the setter and the
+     * spinner together is what keeps a pause that the GUI can set from being one the next save
+     * cannot write.
+     */
+    @Test
+    @DisplayName("the pause spinner and the component setter agree on the pause bound")
+    void pauseBoundIsSharedWithTheSetter() {
+        SpinnerNumberModel model = ReactorPlannerFrame.pauseModel(0);
+        ReactorItem cell = ComponentFactory.createComponent("coolantCell60k");
+
+        cell.setReactorPause(Reactor.MAX_REACTOR_PAUSE);
+        assertEquals(
+                String.valueOf(Reactor.MAX_REACTOR_PAUSE),
+                String.valueOf(cell.getReactorPause()),
+                "the bound is accepted by the setter");
+        assertEquals(
+                String.valueOf(Reactor.MAX_REACTOR_PAUSE),
+                String.valueOf(model.getMaximum()),
+                "and offered by the spinner");
+        cell.setReactorPause(Reactor.MAX_REACTOR_PAUSE + 1);
+        assertEquals(
+                String.valueOf(Reactor.MAX_REACTOR_PAUSE),
+                String.valueOf(cell.getReactorPause()),
+                "one past is refused, so the writer never sees an out-of-range pause");
     }
 
     // ================================================================== resource bundle

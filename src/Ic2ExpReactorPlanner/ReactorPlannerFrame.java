@@ -678,7 +678,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         pulsePanel.add(jLabel3, gridBagConstraints);
 
-        onPulseSpinner.setModel(new javax.swing.SpinnerNumberModel(5000000, 0, 5000000, 1));
+        onPulseSpinner.setModel(pulseDurationModel(5000000));
         onPulseSpinner.setMinimumSize(new java.awt.Dimension(80, 20));
         onPulseSpinner.setPreferredSize(new java.awt.Dimension(80, 20));
         onPulseSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -701,7 +701,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 12, 2, 2);
         pulsePanel.add(jLabel7, gridBagConstraints);
 
-        offPulseSpinner.setModel(new javax.swing.SpinnerNumberModel(0, 0, 5000000, 1));
+        offPulseSpinner.setModel(pulseDurationModel(0));
         offPulseSpinner.setMinimumSize(new java.awt.Dimension(80, 20));
         offPulseSpinner.setPreferredSize(new java.awt.Dimension(80, 20));
         offPulseSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -733,7 +733,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         pulsePanel.add(jLabel9, gridBagConstraints);
 
-        suspendTempSpinner.setModel(new javax.swing.SpinnerNumberModel(120000, 0, 120000, 1));
+        suspendTempSpinner.setModel(temperatureModel(120000));
         suspendTempSpinner.setMinimumSize(new java.awt.Dimension(80, 20));
         suspendTempSpinner.setPreferredSize(new java.awt.Dimension(80, 20));
         suspendTempSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -752,7 +752,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 12, 2, 2);
         pulsePanel.add(jLabel10, gridBagConstraints);
 
-        resumeTempSpinner.setModel(new javax.swing.SpinnerNumberModel(120000, 0, 120000, 1));
+        resumeTempSpinner.setModel(temperatureModel(120000));
         resumeTempSpinner.setMinimumSize(new java.awt.Dimension(80, 20));
         resumeTempSpinner.setPreferredSize(new java.awt.Dimension(80, 20));
         resumeTempSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1319,7 +1319,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         temperatureAndComponentsPanel.add(placingReactorPauseLabel, gridBagConstraints);
 
-        placingReactorPauseSpinner.setModel(new javax.swing.SpinnerNumberModel(0, 0, 10000, 1));
+        placingReactorPauseSpinner.setModel(pauseModel(0));
         placingReactorPauseSpinner.setMinimumSize(new java.awt.Dimension(100, 20));
         placingReactorPauseSpinner.setPreferredSize(new java.awt.Dimension(100, 20));
         placingReactorPauseSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1456,7 +1456,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         maxSimulationTicksLabel.setText(bundle.getString("UI.MaxSimulationTicks")); // NOI18N
         jPanel7.add(maxSimulationTicksLabel);
 
-        maxSimulationTicksSpinner.setModel(new javax.swing.SpinnerNumberModel(5000000, 0, 5000000, 1));
+        maxSimulationTicksSpinner.setModel(tickLimitModel(5000000));
         maxSimulationTicksSpinner.setToolTipText(bundle.getString("UI.MaxSimulationTicksTooltip")); // NOI18N
         maxSimulationTicksSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
@@ -1598,7 +1598,7 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(2, 2, 2, 2);
         automationPanel.add(jLabel14, gridBagConstraints);
 
-        pauseSpinner.setModel(new javax.swing.SpinnerNumberModel(0, 0, 10000, 1));
+        pauseSpinner.setModel(pauseModel(0));
         pauseSpinner.setMinimumSize(new java.awt.Dimension(100, 20));
         pauseSpinner.setPreferredSize(new java.awt.Dimension(100, 20));
         pauseSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1963,6 +1963,35 @@ public class ReactorPlannerFrame extends javax.swing.JFrame {
      */
     public static javax.swing.SpinnerNumberModel automationThresholdModel(final int initial) {
         return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_AUTOMATION_THRESHOLD, 1);
+    }
+
+    /**
+     * The spinner models for the remaining fields the code format bounds, each built from the
+     * constant the writer and the reader use. They were spelled as bare literals here —
+     * {@code 5000000}, {@code 120000}, {@code 10000} — and that is how the threshold spinner came
+     * to declare a maximum nearly a thousand times smaller than the format's (P3-12): a control
+     * whose range does not match the field's bound either refuses a value the format can carry,
+     * or offers one it cannot write back. Naming the bound once makes that drift impossible
+     * rather than merely once-found; the factories are static for the same reason as
+     * {@link automationThresholdModel}, since the frame itself cannot be constructed headlessly.
+     */
+    public static javax.swing.SpinnerNumberModel pulseDurationModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_PULSE_DURATION, 1);
+    }
+
+    /** The suspend/resume temperature spinners, bounded by the code's temperature field. */
+    public static javax.swing.SpinnerNumberModel temperatureModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.CODE_TEMP_BOUND, 1);
+    }
+
+    /** The simulation tick limit spinner, bounded by the code's tick field. */
+    public static javax.swing.SpinnerNumberModel tickLimitModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_SIMULATION_TICKS, 1);
+    }
+
+    /** The reactor pause spinners, bounded by the code's pause field. */
+    public static javax.swing.SpinnerNumberModel pauseModel(final int initial) {
+        return new javax.swing.SpinnerNumberModel(initial, 0, Reactor.MAX_REACTOR_PAUSE, 1);
     }
 
     /**
