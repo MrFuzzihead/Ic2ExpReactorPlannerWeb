@@ -14,7 +14,6 @@ public final class MaterialsList {
 
     private final SortedMap<String, Double> materials = new TreeMap<>();
 
-    private static boolean useGTRecipes = false;
     private static boolean useUfcForCoolantCells = false;
     private static boolean expandAdvancedAlloy = false;
     private static String gtVersion = "none";

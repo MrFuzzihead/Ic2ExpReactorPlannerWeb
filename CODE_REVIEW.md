@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 5 (4 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (17 fixed, 2 retracted) |
+| P3 — dead code, correctness-adjacent cleanup | 20 (18 fixed, 2 retracted) |
 | Retracted / corrected from the first pass    | 6     |
 | **Covered by an automated regression test**  | **512** |
 
@@ -37,7 +37,7 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-2 the stale `lastEUoutput`, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals, P3-7 the resize guard, P3-11 the cross-thread config fields and P3-17 the `GGFuelRod` bonus comment — **all fixed and verified**;
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal, P3-19 the exploding-run output totals, P3-7 the resize guard, P3-11 the cross-thread config fields, P3-17 the `GGFuelRod` bonus comment and P3-20 the dead `useGTRecipes` field — **all fixed and verified**;
 P3-16 and P3-17 are **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
@@ -1426,6 +1426,36 @@ that rather than leaving it latent. The alternative (leave the fields zero and t
 render "not applicable") was rejected: the comparison view has no such rendering, and the numbers
 are real measurements of what the design did before it melted.
 
+### P3-20 ✅ FIXED 🆕 `MaterialsList.useGTRecipes` is a dead field
+
+`private static boolean useGTRecipes = false;` (`MaterialsList.java:17`) appears **exactly once in the
+whole tree** — at its own declaration. No setter, no reader, no `.form` reference.
+
+It was not always dead, and `git log -S useGTRecipes` tells the story in two commits. `ac51afd`
+*"Implemented material variation options"* introduced it with a setter (`useGTRecipes = value`) and
+two readers (`if (useGTRecipes)` inside `getMaterialsForComponent`). `0e29d80` *"Added MC version and
+GT version selectors to Advanced tab"* removed all three, and its message reads:
+
+> These replace the (unreleased) options for using universal fluid cells, GT recipes, and GT 5.09
+> reactor behavior.
+
+So the boolean was **superseded while it was still unreleased**: the two branches it guarded now
+test `"5.08".equals(gtVersion)` / `"5.09".equals(gtVersion)`, and `gtVersion` is the live selector,
+set by `setGTVersion` from the Advanced tab combo. The declaration was simply left behind.
+
+The fix is therefore deletion, not wiring — the option it represented was never released, and the
+mechanism that replaced it already exists. A `private static` field nothing reads is invisible to
+every caller, so the blast radius is strictly smaller than P3-5's dead `GGFuelRod` members, which
+were at least instance state. The two sibling flags from the same commit, `useUfcForCoolantCells`
+and `expandAdvancedAlloy`, are **not** dead: both keep a setter and readers (P3-11 measured them
+EDT-only), so only this one lost its wiring.
+
+| mutation | result |
+|---|---|
+| restore the field | **not caught** — expected: an unread private field has no observable effect, so no test can fail against it. The evidence is the grep count (one occurrence, the declaration) and the two-commit history above, not a test |
+
+Suite stays **512/0** and the corpus **0/304** — nothing reads the field, so nothing can move.
+
 ---
 
 ## ✔️ Checked and cleared — *not* bugs
@@ -1487,6 +1517,8 @@ design as safe".
    the finding measured EDT-only, and recorded as not test-observable like P1-2.
    ~~the `GGFuelRod` bonus~~ (P3-17) is **retracted** — the per-rod value is the rod's own bonus in
    the same slot as the mode-derived one, so it replaces it; composing would move 74 of 304 designs.
+   ~~the dead `useGTRecipes` field~~ (P3-20) is **done** — it was superseded by the `gtVersion`
+   selector while still unreleased (0e29d80), and deleting an unread private field moves nothing.
 10. ~~**P1-5** the negative-payload refusal~~ — **done and verified**; see above. Found by
     `ReactorCodeFuzzTest`, which is now in the suite: 6 tests over **1 598 generated inputs** (84
     prefixes, 84 deletions, 1 176 substitutions, 14 edge cases, 238 legacy mutations, 2 re-applications),
@@ -1708,6 +1740,7 @@ the P1-1 parsing cases, and the P1-3 cancel-path cases. A full run takes about 2
 | P2-1: bound removed, cache never cleared | 1 failed (`cacheIsBounded`) |
 | P2-1: memo dropped, `setIcon` unconditional | **not caught** — the memo is behaviourally invisible; only the cache above it is pinned |
 | P3-17: GG mox bonus composed with the mode bonus, or the override deleted | 11 failed each (74 of 304 corpus) |
+| P3-20: the dead `useGTRecipes` field restored | **not caught** — expected, nothing reads it |
 
 ### Running the mutation checks
 
