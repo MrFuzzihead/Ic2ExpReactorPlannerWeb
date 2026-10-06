@@ -45,6 +45,16 @@ public class BigintStorage {
     public static BigintStorage inputBase64(String code) {
         BigintStorage result = new BigintStorage();
         byte[] temp = Base64.getDecoder().decode(code);
+        if (temp.length > 0 && temp[0] < 0) {
+            // A payload whose leading byte has the high bit set reads as a negative two's-complement
+            // number, and every extract then hands back a negative field. store refuses those, so
+            // accepting one would leave the reactor holding a design that getCode() cannot write
+            // back. A payload this class produced can never hit it: toByteArray of a non-negative
+            // value prepends a zero byte exactly when the high bit would be set, so the refusal is
+            // confined to hand-edited or corrupt codes.
+            throw new IllegalArgumentException(
+                    "the code decodes to a negative payload, so every field in it is negative");
+        }
         result.storedValue = new BigInteger(temp);
         return result;
     }

@@ -659,8 +659,28 @@ class ReactorCodeSerializationTest {
             captureWarnings();
             try {
                 Reactor reactor = new Reactor();
-                assertDoesNotThrow(() -> reactor.setCode("00AF"), "must still not throw");
+                // Decodes to 4097, so revision 1, an empty grid, and zeros everywhere else: junk,
+                // but junk the format still describes, so it is read rather than refused.
+                assertDoesNotThrow(() -> reactor.setCode("ABAB"), "must still not throw");
                 assertTrue(warnings.isEmpty(), "and there is nothing to warn about, got: " + warnings);
+            } finally {
+                WarningDisplay.setSink(null);
+            }
+        }
+
+        @Test
+        @DisplayName("a payload whose leading byte has the high bit set is refused")
+        void negativePayloadRefused() {
+            captureWarnings();
+            try {
+                // 00AF decodes as a negative two's-complement number, so every field in it would
+                // extract negative. The revision check lets it through (a negative revision is not
+                // above 4) and the reactor then holds a tick limit that store refuses, which is to
+                // say a design getCode() cannot write back.
+                assertRefusedAndUnchanged(
+                        "a high-bit payload",
+                        "00AF",
+                        "the code decodes to a negative payload");
             } finally {
                 WarningDisplay.setSink(null);
             }

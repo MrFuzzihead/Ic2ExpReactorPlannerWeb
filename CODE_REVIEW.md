@@ -17,11 +17,11 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 |                                              | Count |
 |----------------------------------------------|-------|
 | P0 — wrong simulation results                | 2 (both fixed) |
-| P1 — crashes / data races                    | 4 (3 fixed) |
+| P1 — crashes / data races                    | 5 (4 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
 | P3 — dead code, correctness-adjacent cleanup | 19 (14 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
-| **Covered by an automated regression test**  | **502** |
+| **Covered by an automated regression test**  | **509** |
 
 **Headline:** the simulation is *fast* (566 ns/tick; a full 5,000,000-tick run ≈ 2.8 s) and
 the serialization layer is *sound* (base64 round-trip is byte-identical, plating accounting
@@ -37,7 +37,8 @@ silently-wrong safety verdict.
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-2 the stale `lastEUoutput`, P3-1 the `needsCooldown` report, P3-5 the
 `GGFuelRod` dead members, P3-4 the `doInBackground` catch, P3-15 the overfill refusal, P3-6 the
-`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override — **all fixed and verified**; P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
+`CoolantCell` sign guard, P3-13 the `Vent` null `parent` guard and P3-9 the `getMaterials()` null recipe and P3-12 the setter bounds and P3-8 the `TextureFactory` fallback loop and P3-14 the `Plating` tooltip override, P1-5 the negative-payload refusal — **all fixed and verified**;
+P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -305,11 +306,12 @@ all-or-nothing by construction rather than by careful ordering. Then:
 #### A limitation worth stating plainly
 
 Neither code format carries a checksum, so strict parsing can guarantee "never crashes, never
-half-applies" but **cannot** distinguish garbage that happens to be well-formed. `"00AF"`
-decodes as a Base64 revision-0 payload whose fields all read as zero and loads as a blank
-reactor, with nothing to warn about. Recorded in
-`ReactorCodeSerializationTest.meaninglessPayloadIsInterpretedNotRefused` so a future attempt
-to add an integrity check knows this is the remaining hole.
+half-applies" but **cannot** distinguish garbage that happens to be well-formed. `"ABAB"` decodes
+as a Base64 payload whose revision is 1, whose grid is empty and whose fields all read as zero, so
+it loads as a blank reactor with nothing to warn about. Recorded in
+`ReactorCodeSerializationTest.Malformed.meaninglessPayloadIsInterpretedNotRefused` so a future
+attempt to add an integrity check knows this is the remaining hole. (An earlier draft used `"00AF"`
+for the same purpose; it turned out to be a *negative* payload instead — see P1-5.)
 
 ### P1-2 ✅ FIXED — `AutomationSimulator.completed` is a non-volatile cross-thread flag
 
@@ -407,6 +409,72 @@ The EU path is self-consistent (`totalEUoutput` in EU/tick divided by 20 for EU/
 path looks like a copy of it with the wrong divisor. Either the per-tick scale should be 40, or
 the total should be 2. Pinned by `AutomationSimulatorTest.Output.fluidReportsHeat` so the
 discrepancy cannot change unnoticed.
+
+---
+
+### P1-5 🆕 A payload whose leading byte has the high bit set decodes negative, and the Base64 reader has no range guard
+
+**Files:** `src/Ic2ExpReactorPlanner/BigintStorage.java:45` (`inputBase64`, `extract`) and
+`src/Ic2ExpReactorPlanner/Reactor.java:635` (`readCodeString`)
+
+`inputBase64` does `new BigInteger(byte[])`, which reads the bytes as a **signed** two's-complement
+number, and `extract` is `divideAndRemainder`, whose remainder takes the sign of the dividend. So
+any payload whose first character has a 6-bit index of 32 or more — `g` and later in the Base64
+alphabet, so roughly half of everything a hand can type — decodes negative, and **every field in
+the payload comes out negative**.
+
+The Base64 reader carries no range guard at all, and normally does not need one: `extract(max)`
+clamps to `[0, max]`. The clamp is only a clamp for a *non-negative* payload. Measured on
+`erp=+IcmCv…QNBA==` (a valid code with its first payload character replaced by `+`):
+
+| field | extracted | what happens |
+|---|---|---|
+| code revision | -252 | `codeRevision > 4` is false, so a negative revision is accepted |
+| component ids | 53 of 54 negative | `createComponent` returns `null`, so the grid comes out blank |
+| current heat | -89 375 | `buildCodeString:754` tries to store it — `store` refuses negatives |
+| **max simulation ticks** | **-2 456 459** | stored *first*, at `buildCodeString:745` — throws |
+
+So `setCode` accepts the code and the **next** call throws:
+
+```
+java.lang.IllegalArgumentException
+    at Ic2ExpReactorPlanner.BigintStorage.store(BigintStorage.java:24)
+    at Ic2ExpReactorPlanner.Reactor.buildCodeString(Reactor.java:745)
+    at Ic2ExpReactorPlanner.Reactor.getCode(Reactor.java:226)
+```
+
+That is P1-1's symptom one step in: the reactor is not half-applied, it is fully applied and then
+**unrepresentable** — the GUI re-encoding it to put it back on the clipboard crashes.
+
+#### ✅ Applied and verified — refuse the payload where it is decoded
+
+One check in `inputBase64` rather than a range guard per field in the reader:
+
+```java
+if (temp.length > 0 && temp[0] < 0) {
+    throw new IllegalArgumentException(
+            "the code decodes to a negative payload, so every field in it is negative");
+}
+```
+
+`readCodeString`'s only caller already catches `IllegalArgumentException`, so the code is refused
+with a message rather than applied. A payload this class itself produced can never reach the check:
+`toByteArray` of a non-negative value prepends a zero byte exactly when the high bit would be set,
+so a round-trip always decodes non-negative — the refusal is confined to hand-edited or corrupt
+codes.
+
+* **Suite:** 502 → 509 (the fuzz harness that found this lands with it, see
+  [Testing](#testing)); corpus **0 / 304** — no design moved, as expected for a change that only
+  refuses codes.
+* **Test flip:** `ReactorCodeSerializationTest.Malformed.meaninglessPayloadIsInterpretedNotRefused`
+  used `"00AF"` as its example of "well-formed but meaningless", and `"00AF"` is one of these
+  negative payloads — its revision extracts as **-251**, which is not above 4, so it slipped past
+  the revision guard and loaded a blank reactor carrying three negative component ids. The test now
+  uses `"ABAB"` (decodes to 4097, revision 1, blank grid, nothing to warn about), and `"00AF"` moved
+  to a new `negativePayloadRefused` assertion. The claim the test was making survives; only the
+  example was wrong.
+* **Mutation check:** reverting the guard fails exactly one test — `substitutions` in the fuzz
+  harness, with the stack above. No hand-written test catches it, which is why the harness exists.
 
 ---
 
@@ -1285,13 +1353,16 @@ design as safe".
    display-only, no calculation touched, pinned by a new `TextureFactoryTest`.
    ~~the stale `lastEUoutput`~~ (P3-2) is **done** — the pair is dead, not merely idempotent.
    Remaining in this item: `plannerResized` (P3-7).
+10. ~~**P1-5** the negative-payload refusal~~ — **done and verified**; see above. Found by
+    `ReactorCodeFuzzTest`, which is now in the suite: 6 tests over ~2 000 generated inputs, and the
+    invariant is that `setCode` ends in one of two whole states.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge. The code-format bound follow-up is
    **done** too — see P3-3.
 
 ## Testing
 
-A 494-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
+A 509-test JUnit 5 suite now lives in `test/Ic2ExpReactorPlanner/**`, plus a **304-design
 simulation corpus** that acts as a differential baseline. Both exist so the work above can be
 done without breaking things, and they are written to be kept rather than thrown away.
 
@@ -1398,6 +1469,7 @@ Two environment notes:
 | `ReactorItemTest` | Base-class defaults, settings guards, heat clamping, classification, per-tick reset, no-op hooks. |
 | `ReactorTest` | Grid bounds, heat accumulator, mode flags, materials aggregation. |
 | `ReactorCodeSerializationTest` | Round-trips every one of the 72 components, a full 54-slot layout, all mode combinations, code revisions 0–4, the legacy hex format, Talonius codes, and every malformed-input case. |
+| `ReactorCodeFuzzTest` | Deterministic mutation harness over `setCode`: every prefix, single-character deletion and substitution of a populated code and its legacy form, plus edge junk — asserting the parser is atomic (the reactor is unchanged, or lands on a design that re-encodes to itself) and never throws. |
 | `AutomationSimulatorTest` | End-to-end: determinism, heating to explosion, output totals, cooling, pulsed/automated/fluid modes, coolant injectors, explosion power, depletion, CSV output. |
 | `MaterialsListTest` | Recipe aggregation, every component has a recipe, GT-version and flag variants, comparison rendering. |
 | `ComponentFactoryTest` | The id/name registries, copy-on-create, subclass preservation, tooltip coverage. |
