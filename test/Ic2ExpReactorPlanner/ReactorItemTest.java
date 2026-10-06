@@ -160,17 +160,23 @@ class ReactorItemTest {
             assertClose(0, cell.adjustCurrentHeat(1000), 1e-9, "nothing refused");
             assertClose(1000, cell.getCurrentHeat(), 1e-9);
 
-            // Overfill is reported as a negative return. Note the arithmetic is
-            // maxHeat - tempHeat + 1, so for an overflow of N the caller is told -(N - 1).
-            // With tempHeat = 1 000 + 100 000 = 101 000 that is 60 000 - 101 000 + 1 = -40 999.
-            assertClose(-40999, cell.adjustCurrentHeat(100000), 1e-9, "capacity is reported as a refusal");
+            // Overfill is reported as a negative return, and the amount is exact: tempHeat =
+            // 1 000 + 100 000 = 101 000 against a 60 000 capacity accepts 59 000 and refuses 41 000,
+            // so the return is 60 000 - 101 000 = -41 000 (CODE_REVIEW.md P3-15; the old "+ 1"
+            // reported an overflow of N as -(N - 1)).
+            assertClose(-41000, cell.adjustCurrentHeat(100000), 1e-9, "capacity is reported as a refusal");
             assertClose(60000, cell.getCurrentHeat(), 1e-9, "clamped at the top");
         }
 
         /**
-         * A component at or above its capacity is <i>broken</i>, which makes
-         * {@code isHeatAcceptor()} false, which turns {@code adjustCurrentHeat} into a pass-through
-         * that returns the adjustment untouched instead of clamping it.
+         * A component at or above its capacity is <i>broken</i>, which makes {@code isHeatAcceptor()}
+         * false, which turns {@code adjustCurrentHeat} into a pass-through that returns the
+         * adjustment untouched instead of clamping it. That is deliberate, not an accident of the
+         * guard: broken means "accepts nothing", and a coolant cell that reaches capacity is broken
+         * in game and cannot be drained by cooling it. Relaxing the guard to {@code maxHeat > 1}
+         * would let the simulation drain a full cell and would report an overheating design as safe
+         * (4 of 304 corpus designs stop exploding), so this test is the thing that keeps it honest.
+         * See CODE_REVIEW.md P3-16.
          */
         @Test
         @DisplayName("a full (broken) component passes adjustments straight through")

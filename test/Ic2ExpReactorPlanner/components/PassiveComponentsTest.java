@@ -62,10 +62,12 @@ class PassiveComponentsTest {
         }
 
         /**
-         * {@code adjustCurrentHeat} reports refusal as a <i>negative</i> return:
-         * {@code result = maxHeat - tempHeat + 1}. Overfilling a 60k cell by 20 000 therefore
-         * returns -9 999, and callers such as {@code FuelRod.handleHeat} read that as "9 999
-         * refused" and push the remainder elsewhere.
+         * {@code adjustCurrentHeat} reports refusal as a <i>negative</i> return, and the amount is
+         * exact: {@code result = maxHeat - tempHeat}, so overfilling a 60k cell by 20 000 returns
+         * -10 000. The old {@code + 1} reported an overflow of N as -(N - 1) (CODE_REVIEW.md P3-15).
+         * Worth noting for anyone tempted to lean on the value: {@code Vent.handleSideVentCooling}
+         * is the only caller that reads it, and it only ever passes a negative adjustment, which
+         * takes the exact underflow branch.
          */
         @Test
         @DisplayName("overfilling reports the refusal as a negative return")
@@ -73,8 +75,8 @@ class PassiveComponentsTest {
             Reactor reactor = new Reactor();
             CoolantCell cell = (CoolantCell) place(reactor, 2, 2, "coolantCell60k");
             assertClose(0, cell.adjustCurrentHeat(50000), 1e-9, "all accepted");
-            // 50 000 + 20 000 = 70 000, so 60 000 - 70 000 + 1 = -9 999 was refused
-            assertClose(-9999, cell.adjustCurrentHeat(20000), 1e-9, "9 999 refused");
+            // 50 000 + 20 000 = 70 000 against a 60 000 capacity, so 60 000 - 70 000 = -10 000 refused
+            assertClose(-10000, cell.adjustCurrentHeat(20000), 1e-9, "10 000 refused");
             assertClose(60000, cell.getCurrentHeat(), 1e-9, "clamped to capacity, never above");
         }
 

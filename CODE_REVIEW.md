@@ -19,7 +19,7 @@ analysis only · ⚠️ *corrected* (my first-pass claim was wrong or imprecise)
 | P0 — wrong simulation results                | 2 (both fixed) |
 | P1 — crashes / data races                    | 4 (3 fixed) |
 | P2 — performance                             | 3 (3 fixed) |
-| P3 — dead code, correctness-adjacent cleanup | 19 (6 fixed) |
+| P3 — dead code, correctness-adjacent cleanup | 19 (7 fixed, 1 retracted) |
 | Retracted / corrected from the first pass    | 5     |
 | **Covered by an automated regression test**  | **496** |
 
@@ -36,7 +36,8 @@ silently-wrong safety verdict.
 **Status:** P0-1 `Exchanger`, P0-2 `Condensator`/P3-18, P1-1 code parsing, P3-10, P1-2/P1-3
 `AutomationSimulator`, P2-1 `ImageIcon` caching, P2-2 the tick-loop snapshot, P2-3 the minor
 performance sweep, P3-3 the `getOldCode()` default, P3-1 the `needsCooldown` report, P3-5 the
-`GGFuelRod` dead members and P3-4 the `doInBackground` catch — **all fixed and verified**. Both P0s are closed,
+`GGFuelRod` dead members, P3-4 the `doInBackground` catch and P3-15 the overfill refusal — **all fixed and verified**;
+P3-16 is **retracted** as deliberate game semantics. Both P0s are closed,
 and no test in the suite is skipped.
 
 ---
@@ -847,7 +848,7 @@ all three platings return `null`. `ReactorPlannerFrame.buildTooltipInfo` depends
 resulting `NullPointerException` and falling back to a bare name — an exception-driven code path
 that is easy to break. Pinned by `ComponentFactoryTest.onlyPlatingLacksATooltip`.
 
-### P3-15 ✅🆕 Overfill refusal in `adjustCurrentHeat` is off by one
+### P3-15 ✅ FIXED 🆕 Overfill refusal in `adjustCurrentHeat` is off by one
 
 **File:** `src/Ic2ExpReactorPlanner/components/ReactorItem.java`
 
@@ -861,7 +862,24 @@ that is 1 000 over returns −999. Underflow is exact (`result = tempHeat`). Har
 because callers only test the sign, but it means the refusal value is not the amount refused.
 Pinned by `ReactorItemTest.AdjustCurrentHeat.clampsToTheCapacityRange`.
 
-### P3-16 ✅🆕 A broken component's `adjustCurrentHeat` becomes an unclamped pass-through
+#### ✅ Applied and verified
+
+`result = getMaxHeat() - tempHeat;` — the refusal is now exactly the amount not accepted.
+
+**The review's "callers only test the sign" is wrong in a way that matters.** No caller tests the
+sign either. Every call site discards the return value (`FuelRod.handleHeat`/`handleGTHeat`,
+`Exchanger.transfer`, `Vent:53/54/58`) **except** `Vent.handleSideVentCooling:78`, which does
+`double rejectedCooling = coolableNeighbor.adjustCurrentHeat(-sideVent);`. That call only ever
+passes a *negative* adjustment, which takes the exact underflow branch (`result = tempHeat`), so
+the `+ 1` never reaches it. That is why the corpus is unmoved — the finding is a reporting bug in
+a value nothing consumes, not a calculation bug.
+
+| mutation | result |
+|---|---|
+| revert to `+ 1` | **2 failed** — `ReactorItemTest.clampsToTheCapacityRange` and `PassiveComponentsTest.overfillReportsNegativeRefusal`, both updated to −41 000 / −10 000 |
+| corpus after the fix | **0 of 304 designs move** — as predicted above |
+
+### P3-16 ✅ RETRACTED 🆕 A broken component's `adjustCurrentHeat` becomes an unclamped pass-through
 
 `ReactorItem.adjustCurrentHeat` guards on `isHeatAcceptor()`, which is `maxHeat > 1 &&
 !isBroken()`. Once a component reaches its capacity it is *broken*, so the guard fails and the
@@ -871,6 +889,41 @@ method returns `heat` **unchanged**, with no clamping at either end. So
 (callers select neighbours before offering heat, and a broken cell is skipped by the caller's
 `isBroken()` check), but it is a sharp edge: "clamped to [0, maxHeat]" is only true while the
 component is unbroken. Pinned by `ReactorItemTest.brokenComponentPassesAdjustmentsThrough`.
+
+#### ✅ Verified intentional — the guard stays
+
+Two claims in the finding are wrong, and the second one decides the outcome:
+
+* **"Not reachable from the current GUI" is false.** The self-adjustments skip the caller's
+  `isBroken()` check entirely — `Vent:54 this.adjustCurrentHeat(deltaHeat)`, `Vent:58
+  adjustCurrentHeat(-currentDissipation)`, `Exchanger:130 adjustCurrentHeat(myHeat)`. The corpus
+  confirms it: relaxing the guard moves **4 of 304 designs**, every one of them tagged
+  `cell, rod, vent`.
+* **The pass-through is not a bug, it is the game's rule.** A component that reaches capacity is
+  broken and stops working; a broken coolant cell cannot be revived by cooling it. "Broken ⇒
+  accepts nothing, stores nothing, reports the whole adjustment as refused" is self-consistent —
+  and the method's own `@return` comment already contemplates "breaking due to excessive heat".
+* **The direction of the change is the wrong way round for a planner.** Relaxing the guard makes
+  full cells drainable, so the reactor stops entering the failure state and designs that currently
+  report as overheating start reporting as safe:
+
+  | design | before | after relaxing the guard |
+  |---|---|---|
+  | `gen-078` | burns at 521 s, `maxTemp` 10 010 | runs the full 4 000-tick cap, `maxTemp` **24** (never heats at all) |
+  | `gen-090` | explodes at 128 s, first component broken at 62 s | never breaks, `tXplode` INT_MAX |
+  | `gen-021` | `tLava` 79 s, `maxTemp` 12 251 | `tLava` 84 s, `maxTemp` 11 459 |
+
+  A planner that calls an overheating design safe is worse than one that reports it correctly —
+  this is the same class of harm P0-2 turned into a *safety* verdict, in the opposite direction.
+
+So the finding is closed by **documenting** the pass-through instead of removing it: the guard
+site carries a comment saying broken means "accepts nothing" and citing the corpus cost, and
+`ReactorItemTest.brokenComponentPassesAdjustmentsThrough` is strengthened to say the same. The
+test already pinned the behaviour; it now also pins *why* it must not be "fixed".
+
+| mutation | result |
+|---|---|
+| relax the guard to `maxHeat > 1` (the review's fix) | **3 failed** — `ReactorItemTest.brokenComponentPassesAdjustmentsThrough`, `VentTest.a broken neighbour refuses the vent even though isCoolable() is still true`, **and** `CorpusBaselineTest` (4 of 304) |
 
 ### P3-17 ✅🆕 `GGFuelRod.getHeatBonus()` shadows the global GT5.09/GTNH bonus entirely
 
@@ -947,10 +1000,11 @@ design as safe".
 6. ~~**P1-4** decide the heat-unit divisor~~ — **skipped**; re-evaluated as a false positive on the
    arithmetic, leaving only the `HU/t` / `EU/t` bundle label to check against upstream.
 7. ~~**P2-3** minor sweep~~ — **done and verified**; see above. (c) and (e) retracted as false positives.
-8. **P3 sweep** — ~~`needsCooldown`~~ (P3-1), ~~the dead `GGFuelRod` members~~ (P3-5) and
-   ~~`catch (Throwable)`~~ (P3-4) are **done**; fix the
-   stale `lastEUoutput`, tidy `plannerResized`, and add
-   the `parent` null guard in `Vent.getVentCoolingCapacity()`.
+8. **P3 sweep** — ~~`needsCooldown`~~ (P3-1), ~~the dead `GGFuelRod` members~~ (P3-5),
+   ~~`catch (Throwable)`~~ (P3-4) and ~~the overfill refusal~~ (P3-15) are **done**; P3-16 is
+   **retracted** (the pass-through is the game's rule, and relaxing it makes 4/304 designs look safe).
+   Remaining in this item: the stale `lastEUoutput`, `plannerResized`, and the
+   `parent` null guard in `Vent.getVentCoolingCapacity()`.
 9. ~~**P3-3** `getOldCode()` default~~ — **done and verified**; see above. Latent today, pinned by
    an assertion that only bites once the two constants diverge.
 
