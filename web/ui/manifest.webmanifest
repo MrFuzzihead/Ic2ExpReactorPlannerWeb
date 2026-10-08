@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "The manifest is what makes the page installable on a phone. Every value here is a value the",
+    "repo already owns: the name is the page's own <h1>, the colours are the stylesheet's --bg and",
+    "--ink, the start URL is the page itself, and the icon is a real component sprite from web/assets",
+    "rather than an invented logo. The icon is 16x16 because that is the size the sprite actually is",
+    "-- the repo has no larger one, and a manifest that claimed 192x192 for a 16-pixel file would be",
+    "lying about an asset that does not exist."
+  ],
+  "name": "IC2 Extended Reactor Planner",
+  "short_name": "IC2 Planner",
+  "description": "Plan and share Infinite Reactor Core 2 extended reactor designs by code.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#17181b",
+  "theme_color": "#17181b",
+  "icons": [
+    {
+      "src": "../assets/icons/reactorCoolantSimple.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

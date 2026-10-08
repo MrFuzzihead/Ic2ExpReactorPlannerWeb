@@ -193,3 +193,42 @@ publishing {
         }
     }
 }
+
+
+// Web preview: the green Run button in an IDE running in Community mode, where the Node.js
+// run configurations and the JavaScript debugger are Ultimate-only features. The server itself
+// stays tools/serve.mjs so the two paths cannot drift apart.
+task webPreview {
+    description 'Serve the repository and open web/ui/ in the default browser; the log goes to web-preview.log.'
+    if (!file('tools/serve.mjs').exists()) {
+        out.println('tools/serve.mjs is missing — nothing to serve')
+    } else {
+        // The button is idempotent: --stop frees the port first, so a second press replaces the
+        // server instead of leaving it on a busy port. Its lines go to the log, same as the server's.
+        // Waiting matters: `execute` starts the child and returns immediately, and a stop that is
+        // still running when the new server binds the port finds that new server in its netstat and
+        // kills it — the press then leaves nothing listening, which reads in the browser as a page
+        // that cannot be reached at all.
+        def freed = ('node tools/serve.mjs --stop --log web-preview.log').execute()
+        freed.waitFor()
+        // An IDE Run console captures the child's output and only shows it when the child exits, and
+        // this child never exits, so the same lines go to a file the editor can open.
+        def server = ('node tools/serve.mjs --open --log web-preview.log').execute()
+        def code = server.waitFor()
+        if (code != 0) {
+            out.println("the preview server exited with ${code} — see web-preview.log")
+        }
+    }
+}
+
+// The server is orphaned when the run ends (Gradle 8 reaps the child handle), so stopping it
+// needs its own button.
+task webStop {
+    description 'Stop the preview server listening on 8123.'
+    def stop = ('node tools/serve.mjs --stop --log web-preview.log').execute()
+    def code = stop.waitFor()
+    if (code != 0) {
+        out.println('the preview server is still there — stop it yourself')
+    }
+}
+

@@ -1,0 +1,1243 @@
+{
+  "note": "Extracted from ComponentFactory.java ITEMS on the desktop tree. Frozen data: the web tree never regenerates it.",
+  "count": 72,
+  "components": [
+    {
+      "class": "FuelRod",
+      "id": 1,
+      "baseName": "fuelRodUranium",
+      "name": {
+        "i18n": "ComponentName.FuelRodUranium"
+      },
+      "image": {
+        "image": "reactorUraniumSimple.png",
+        "fallback": "uranium.png"
+      },
+      "maxDamage": 20000,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "energyMult": 100,
+      "heatMult": 2,
+      "rodCount": 1,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 2,
+      "baseName": "dualFuelRodUranium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodUranium"
+      },
+      "image": {
+        "image": "reactorUraniumDual.png",
+        "fallback": "dual_uranium.png"
+      },
+      "maxDamage": 20000,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "energyMult": 200,
+      "heatMult": 4,
+      "rodCount": 2,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 3,
+      "baseName": "quadFuelRodUranium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodUranium"
+      },
+      "image": {
+        "image": "reactorUraniumQuad.png",
+        "fallback": "quad_uranium.png"
+      },
+      "maxDamage": 20000,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "energyMult": 400,
+      "heatMult": 8,
+      "rodCount": 4,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 4,
+      "baseName": "fuelRodMox",
+      "name": {
+        "i18n": "ComponentName.FuelRodMox"
+      },
+      "image": {
+        "image": "reactorMOXSimple.png",
+        "fallback": "mox.png"
+      },
+      "maxDamage": 10000,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "energyMult": 100,
+      "heatMult": 2,
+      "rodCount": 1,
+      "moxStyle": true
+    },
+    {
+      "class": "FuelRod",
+      "id": 5,
+      "baseName": "dualFuelRodMox",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodMox"
+      },
+      "image": {
+        "image": "reactorMOXDual.png",
+        "fallback": "dual_mox.png"
+      },
+      "maxDamage": 10000,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "energyMult": 200,
+      "heatMult": 4,
+      "rodCount": 2,
+      "moxStyle": true
+    },
+    {
+      "class": "FuelRod",
+      "id": 6,
+      "baseName": "quadFuelRodMox",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodMox"
+      },
+      "image": {
+        "image": "reactorMOXQuad.png",
+        "fallback": "quad_mox.png"
+      },
+      "maxDamage": 10000,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "energyMult": 400,
+      "heatMult": 8,
+      "rodCount": 4,
+      "moxStyle": true
+    },
+    {
+      "class": "Reflector",
+      "id": 7,
+      "baseName": "neutronReflector",
+      "name": {
+        "i18n": "ComponentName.NeutronReflector"
+      },
+      "image": {
+        "image": "reactorReflector.png",
+        "fallback": "neutron_reflector.png"
+      },
+      "maxDamage": 30000,
+      "maxHeat": 1,
+      "sourceMod": null
+    },
+    {
+      "class": "Reflector",
+      "id": 8,
+      "baseName": "thickNeutronReflector",
+      "name": {
+        "i18n": "ComponentName.ThickNeutronReflector"
+      },
+      "image": {
+        "image": "reactorReflectorThick.png",
+        "fallback": "thick_neutron_reflector.png"
+      },
+      "maxDamage": 120000,
+      "maxHeat": 1,
+      "sourceMod": null
+    },
+    {
+      "class": "Vent",
+      "id": 9,
+      "baseName": "heatVent",
+      "name": {
+        "i18n": "ComponentName.HeatVent"
+      },
+      "image": {
+        "image": "reactorVent.png",
+        "fallback": "heat_vent.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1000,
+      "sourceMod": null,
+      "selfVent": 6,
+      "hullDraw": 0,
+      "sideVent": 0
+    },
+    {
+      "class": "Vent",
+      "id": 10,
+      "baseName": "advancedHeatVent",
+      "name": {
+        "i18n": "ComponentName.AdvancedHeatVent"
+      },
+      "image": {
+        "image": "reactorVentDiamond.png",
+        "fallback": "advanced_heat_vent.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1000,
+      "sourceMod": null,
+      "selfVent": 12,
+      "hullDraw": 0,
+      "sideVent": 0
+    },
+    {
+      "class": "Vent",
+      "id": 11,
+      "baseName": "reactorHeatVent",
+      "name": {
+        "i18n": "ComponentName.ReactorHeatVent"
+      },
+      "image": {
+        "image": "reactorVentCore.png",
+        "fallback": "reactor_heat_vent.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1000,
+      "sourceMod": null,
+      "selfVent": 5,
+      "hullDraw": 5,
+      "sideVent": 0
+    },
+    {
+      "class": "Vent",
+      "id": 12,
+      "baseName": "componentHeatVent",
+      "name": {
+        "i18n": "ComponentName.ComponentHeatVent"
+      },
+      "image": {
+        "image": "reactorVentSpread.png",
+        "fallback": "component_heat_vent.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "selfVent": 0,
+      "hullDraw": 0,
+      "sideVent": 4
+    },
+    {
+      "class": "Vent",
+      "id": 13,
+      "baseName": "overclockedHeatVent",
+      "name": {
+        "i18n": "ComponentName.OverclockedHeatVent"
+      },
+      "image": {
+        "image": "reactorVentGold.png",
+        "fallback": "overclocked_heat_vent.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1000,
+      "sourceMod": null,
+      "selfVent": 20,
+      "hullDraw": 36,
+      "sideVent": 0
+    },
+    {
+      "class": "CoolantCell",
+      "id": 14,
+      "baseName": "coolantCell10k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell10k"
+      },
+      "image": {
+        "image": "reactorCoolantSimple.png",
+        "fallback": "heat_storage.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 10000,
+      "sourceMod": null
+    },
+    {
+      "class": "CoolantCell",
+      "id": 15,
+      "baseName": "coolantCell30k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell30k"
+      },
+      "image": {
+        "image": "reactorCoolantTriple.png",
+        "fallback": "tri_heat_storage.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 30000,
+      "sourceMod": null
+    },
+    {
+      "class": "CoolantCell",
+      "id": 16,
+      "baseName": "coolantCell60k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell60k"
+      },
+      "image": {
+        "image": "reactorCoolantSix.png",
+        "fallback": "hex_heat_storage.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 60000,
+      "sourceMod": null
+    },
+    {
+      "class": "Exchanger",
+      "id": 17,
+      "baseName": "heatExchanger",
+      "name": {
+        "i18n": "ComponentName.HeatExchanger"
+      },
+      "image": {
+        "image": "reactorHeatSwitch.png",
+        "fallback": "heat_exchanger.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 2500,
+      "sourceMod": null,
+      "switchSide": 12,
+      "switchReactor": 4
+    },
+    {
+      "class": "Exchanger",
+      "id": 18,
+      "baseName": "advancedHeatExchanger",
+      "name": {
+        "i18n": "ComponentName.AdvancedHeatExchanger"
+      },
+      "image": {
+        "image": "reactorHeatSwitchDiamond.png",
+        "fallback": "advanced_heat_exchanger.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 10000,
+      "sourceMod": null,
+      "switchSide": 24,
+      "switchReactor": 8
+    },
+    {
+      "class": "Exchanger",
+      "id": 19,
+      "baseName": "coreHeatExchanger",
+      "name": {
+        "i18n": "ComponentName.ReactorHeatExchanger"
+      },
+      "image": {
+        "image": "reactorHeatSwitchCore.png",
+        "fallback": "reactor_heat_exchanger.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 5000,
+      "sourceMod": null,
+      "switchSide": 0,
+      "switchReactor": 72
+    },
+    {
+      "class": "Exchanger",
+      "id": 20,
+      "baseName": "componentHeatExchanger",
+      "name": {
+        "i18n": "ComponentName.ComponentHeatExchanger"
+      },
+      "image": {
+        "image": "reactorHeatSwitchSpread.png",
+        "fallback": "component_heat_exchanger.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 5000,
+      "sourceMod": null,
+      "switchSide": 36,
+      "switchReactor": 0
+    },
+    {
+      "class": "Plating",
+      "id": 21,
+      "baseName": "reactorPlating",
+      "name": {
+        "i18n": "ComponentName.ReactorPlating"
+      },
+      "image": {
+        "image": "reactorPlating.png",
+        "fallback": "plating.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "heatAdjustment": 1000,
+      "explosionPowerMultiplier": 0.9025
+    },
+    {
+      "class": "Plating",
+      "id": 22,
+      "baseName": "heatCapacityReactorPlating",
+      "name": {
+        "i18n": "ComponentName.HeatCapacityReactorPlating"
+      },
+      "image": {
+        "image": "reactorPlatingHeat.png",
+        "fallback": "heat_plating.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "heatAdjustment": 1700,
+      "explosionPowerMultiplier": 0.9801
+    },
+    {
+      "class": "Plating",
+      "id": 23,
+      "baseName": "containmentReactorPlating",
+      "name": {
+        "i18n": "ComponentName.ContainmentReactorPlating"
+      },
+      "image": {
+        "image": "reactorPlatingExplosive.png",
+        "fallback": "containment_plating.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1,
+      "sourceMod": null,
+      "heatAdjustment": 500,
+      "explosionPowerMultiplier": 0.81
+    },
+    {
+      "class": "Condensator",
+      "id": 24,
+      "baseName": "rshCondensator",
+      "name": {
+        "i18n": "ComponentName.RshCondensator"
+      },
+      "image": {
+        "image": "reactorCondensator.png",
+        "fallback": "rsh_condensator.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 20000,
+      "sourceMod": null
+    },
+    {
+      "class": "Condensator",
+      "id": 25,
+      "baseName": "lzhCondensator",
+      "name": {
+        "i18n": "ComponentName.LzhCondensator"
+      },
+      "image": {
+        "image": "reactorCondensatorLap.png",
+        "fallback": "lzh_condensator.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 100000,
+      "sourceMod": null
+    },
+    {
+      "class": "FuelRod",
+      "id": 26,
+      "baseName": "fuelRodThorium",
+      "name": {
+        "i18n": "ComponentName.FuelRodThorium"
+      },
+      "image": {
+        "image": "gt.Thoriumcell.png"
+      },
+      "maxDamage": 50000,
+      "maxHeat": 1,
+      "sourceMod": "GT5.08",
+      "energyMult": 20,
+      "heatMult": 0.5,
+      "rodCount": 1,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 27,
+      "baseName": "dualFuelRodThorium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodThorium"
+      },
+      "image": {
+        "image": "gt.Double_Thoriumcell.png"
+      },
+      "maxDamage": 50000,
+      "maxHeat": 1,
+      "sourceMod": "GT5.08",
+      "energyMult": 40,
+      "heatMult": 1,
+      "rodCount": 2,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 28,
+      "baseName": "quadFuelRodThorium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodThorium"
+      },
+      "image": {
+        "image": "gt.Quad_Thoriumcell.png"
+      },
+      "maxDamage": 50000,
+      "maxHeat": 1,
+      "sourceMod": "GT5.08",
+      "energyMult": 80,
+      "heatMult": 2,
+      "rodCount": 4,
+      "moxStyle": false
+    },
+    {
+      "class": "CoolantCell",
+      "id": 29,
+      "baseName": "coolantCellHelium60k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell60kHelium"
+      },
+      "image": {
+        "image": "gt.60k_Helium_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 60000,
+      "sourceMod": "GT5.08"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 30,
+      "baseName": "coolantCellHelium180k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell180kHelium"
+      },
+      "image": {
+        "image": "gt.180k_Helium_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 180000,
+      "sourceMod": "GT5.08"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 31,
+      "baseName": "coolantCellHelium360k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell360kHelium"
+      },
+      "image": {
+        "image": "gt.360k_Helium_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 360000,
+      "sourceMod": "GT5.08"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 32,
+      "baseName": "coolantCellNak60k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell60kNak"
+      },
+      "image": {
+        "image": "gt.60k_NaK_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 60000,
+      "sourceMod": "GT5.08"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 33,
+      "baseName": "coolantCellNak180k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell180kNak"
+      },
+      "image": {
+        "image": "gt.180k_NaK_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 180000,
+      "sourceMod": "GT5.08"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 34,
+      "baseName": "coolantCellNak360k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell360kNak"
+      },
+      "image": {
+        "image": "gt.360k_NaK_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 360000,
+      "sourceMod": "GT5.08"
+    },
+    {
+      "class": "Reflector",
+      "id": 35,
+      "baseName": "iridiumNeutronReflector",
+      "name": {
+        "i18n": "ComponentName.IridiumNeutronReflector"
+      },
+      "image": {
+        "image": "gt.neutronreflector.png",
+        "fallback": "neutron_reflector.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1,
+      "sourceMod": null
+    },
+    {
+      "class": "FuelRod",
+      "id": 36,
+      "baseName": "fuelRodNaquadah",
+      "name": {
+        "i18n": "ComponentName.FuelRodNaquadah"
+      },
+      "image": {
+        "image": "gt.Naquadahcell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GT5.09",
+      "energyMult": 100,
+      "heatMult": 2,
+      "rodCount": 1,
+      "moxStyle": true
+    },
+    {
+      "class": "FuelRod",
+      "id": 37,
+      "baseName": "dualFuelRodNaquadah",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodNaquadah"
+      },
+      "image": {
+        "image": "gt.Double_Naquadahcell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GT5.09",
+      "energyMult": 200,
+      "heatMult": 4,
+      "rodCount": 2,
+      "moxStyle": true
+    },
+    {
+      "class": "FuelRod",
+      "id": 38,
+      "baseName": "quadFuelRodNaquadah",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodNaquadah"
+      },
+      "image": {
+        "image": "gt.Quad_Naquadahcell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GT5.09",
+      "energyMult": 400,
+      "heatMult": 8,
+      "rodCount": 4,
+      "moxStyle": true
+    },
+    {
+      "class": "FuelRod",
+      "id": 39,
+      "baseName": "fuelRodCoaxium",
+      "name": {
+        "i18n": "ComponentName.FuelRodCoaxium"
+      },
+      "image": {
+        "image": "coaxium_rod.png"
+      },
+      "maxDamage": 20000,
+      "maxHeat": 1,
+      "sourceMod": "Coaxium",
+      "energyMult": 100,
+      "heatMult": 0,
+      "rodCount": 1,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 40,
+      "baseName": "dualFuelRodCoaxium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodCoaxium"
+      },
+      "image": {
+        "image": "coaxium_rod_dual.png"
+      },
+      "maxDamage": 20000,
+      "maxHeat": 1,
+      "sourceMod": "Coaxium",
+      "energyMult": 200,
+      "heatMult": 0,
+      "rodCount": 2,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 41,
+      "baseName": "quadFuelRodCoaxium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodCoaxium"
+      },
+      "image": {
+        "image": "coaxium_rod_quad.png"
+      },
+      "maxDamage": 20000,
+      "maxHeat": 1,
+      "sourceMod": "Coaxium",
+      "energyMult": 400,
+      "heatMult": 0,
+      "rodCount": 4,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 42,
+      "baseName": "fuelRodCesium",
+      "name": {
+        "i18n": "ComponentName.FuelRodCesium"
+      },
+      "image": {
+        "image": "coaxium_rod.png"
+      },
+      "maxDamage": 10861,
+      "maxHeat": 1,
+      "sourceMod": "Coaxium",
+      "energyMult": 200,
+      "heatMult": 1,
+      "rodCount": 1,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 43,
+      "baseName": "dualFuelRodCesium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodCesium"
+      },
+      "image": {
+        "image": "coaxium_rod_dual.png"
+      },
+      "maxDamage": 10861,
+      "maxHeat": 1,
+      "sourceMod": "Coaxium",
+      "energyMult": 400,
+      "heatMult": 6,
+      "rodCount": 2,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 44,
+      "baseName": "quadFuelRodCesium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodCesium"
+      },
+      "image": {
+        "image": "coaxium_rod_quad.png"
+      },
+      "maxDamage": 10861,
+      "maxHeat": 1,
+      "sourceMod": "Coaxium",
+      "energyMult": 800,
+      "heatMult": 24,
+      "rodCount": 4,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 45,
+      "baseName": "fuelRodNaquadahGTNH",
+      "name": {
+        "i18n": "ComponentName.FuelRodNaquadahGTNH"
+      },
+      "image": {
+        "image": "gt.Naquadahcell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 200,
+      "heatMult": 2,
+      "rodCount": 1,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 46,
+      "baseName": "dualFuelRodNaquadahGTNH",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodNaquadahGTNH"
+      },
+      "image": {
+        "image": "gt.Double_Naquadahcell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 400,
+      "heatMult": 4,
+      "rodCount": 2,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 47,
+      "baseName": "quadFuelRodNaquadahGTNH",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodNaquadahGTNH"
+      },
+      "image": {
+        "image": "gt.Quad_Naquadahcell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 800,
+      "heatMult": 8,
+      "rodCount": 4,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 48,
+      "baseName": "fuelRodNaquadria",
+      "name": {
+        "i18n": "ComponentName.FuelRodNaquadria"
+      },
+      "image": {
+        "image": "gt.MNqCell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 200,
+      "heatMult": 2,
+      "rodCount": 1,
+      "moxStyle": true
+    },
+    {
+      "class": "FuelRod",
+      "id": 49,
+      "baseName": "dualFuelRodNaquadria",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodNaquadria"
+      },
+      "image": {
+        "image": "gt.Double_MNqCell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 400,
+      "heatMult": 4,
+      "rodCount": 2,
+      "moxStyle": true
+    },
+    {
+      "class": "FuelRod",
+      "id": 50,
+      "baseName": "quadFuelRodNaquadria",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodNaquadria"
+      },
+      "image": {
+        "image": "gt.Quad_MNqCell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 800,
+      "heatMult": 8,
+      "rodCount": 4,
+      "moxStyle": true
+    },
+    {
+      "class": "FuelRod",
+      "id": 51,
+      "baseName": "fuelRodTiberium",
+      "name": {
+        "i18n": "ComponentName.FuelRodTiberium"
+      },
+      "image": {
+        "image": "gt.Tiberiumcell.png"
+      },
+      "maxDamage": 50000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 100,
+      "heatMult": 1,
+      "rodCount": 1,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 52,
+      "baseName": "dualFuelRodTiberium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodTiberium"
+      },
+      "image": {
+        "image": "gt.Double_Tiberiumcell.png"
+      },
+      "maxDamage": 50000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 200,
+      "heatMult": 2,
+      "rodCount": 2,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 53,
+      "baseName": "quadFuelRodTiberium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodTiberium"
+      },
+      "image": {
+        "image": "gt.Quad_Tiberiumcell.png"
+      },
+      "maxDamage": 50000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 400,
+      "heatMult": 4,
+      "rodCount": 4,
+      "moxStyle": false
+    },
+    {
+      "class": "FuelRod",
+      "id": 54,
+      "baseName": "fuelRodTheCore",
+      "name": {
+        "i18n": "ComponentName.FuelRodTheCore"
+      },
+      "image": {
+        "image": "gt.Core_Reactor_Cell.png"
+      },
+      "maxDamage": 100000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 12800,
+      "heatMult": 64,
+      "rodCount": 32,
+      "moxStyle": false
+    },
+    {
+      "class": "CoolantCell",
+      "id": 55,
+      "baseName": "coolantCellSpace180k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell180kSpace"
+      },
+      "image": {
+        "image": "gt.180k_Space_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 180000,
+      "sourceMod": "GTNH"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 56,
+      "baseName": "coolantCellSpace360k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell360kSpace"
+      },
+      "image": {
+        "image": "gt.360k_Space_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 360000,
+      "sourceMod": "GTNH"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 57,
+      "baseName": "coolantCellSpace540k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell540kSpace"
+      },
+      "image": {
+        "image": "gt.540k_Space_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 540000,
+      "sourceMod": "GTNH"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 58,
+      "baseName": "coolantCellSpace1080k",
+      "name": {
+        "i18n": "ComponentName.CoolantCell1080kSpace"
+      },
+      "image": {
+        "image": "gt.1080k_Space_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1080000,
+      "sourceMod": "GTNH"
+    },
+    {
+      "class": "CoolantCell",
+      "id": 59,
+      "baseName": "coolantCellNeutronium1G",
+      "name": {
+        "i18n": "ComponentName.CoolantCell1GNeutronium"
+      },
+      "image": {
+        "image": "gt.1g_Neutronium_Coolantcell.png"
+      },
+      "maxDamage": 1,
+      "maxHeat": 1000000000,
+      "sourceMod": "GT5.09"
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 60,
+      "baseName": "fuelRodCompressedUranium",
+      "name": {
+        "i18n": "ComponentName.FuelRodCompressedUranium"
+      },
+      "image": {
+        "image": "gg.CompressedUranium.png"
+      },
+      "maxDamage": 70000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 200,
+      "heatMult": 2,
+      "rodCount": 1,
+      "moxStyle": false,
+      "heatBonus": 0
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 61,
+      "baseName": "dualFuelRodCompressedUranium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodCompressedUranium"
+      },
+      "image": {
+        "image": "gg.Double_CompressedUranium.png"
+      },
+      "maxDamage": 70000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 400,
+      "heatMult": 4,
+      "rodCount": 2,
+      "moxStyle": false,
+      "heatBonus": 0
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 62,
+      "baseName": "quadFuelRodCompressedUranium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodCompressedUranium"
+      },
+      "image": {
+        "image": "gg.Quad_CompressedUranium.png"
+      },
+      "maxDamage": 70000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 800,
+      "heatMult": 8,
+      "rodCount": 4,
+      "moxStyle": false,
+      "heatBonus": 0
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 63,
+      "baseName": "fuelRodCompressedPlutonium",
+      "name": {
+        "i18n": "ComponentName.FuelRodCompressedPlutonium"
+      },
+      "image": {
+        "image": "gg.CompressedPlutonium.png"
+      },
+      "maxDamage": 30000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 100,
+      "heatMult": 2,
+      "rodCount": 1,
+      "moxStyle": true,
+      "heatBonus": 6
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 64,
+      "baseName": "dualFuelRodCompressedPlutonium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodCompressedPlutonium"
+      },
+      "image": {
+        "image": "gg.Double_CompressedPlutonium.png"
+      },
+      "maxDamage": 30000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 200,
+      "heatMult": 4,
+      "rodCount": 2,
+      "moxStyle": true,
+      "heatBonus": 6
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 65,
+      "baseName": "quadFuelRodCompressedPlutonium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodCompressedPlutonium"
+      },
+      "image": {
+        "image": "gg.Quad_CompressedPlutonium.png"
+      },
+      "maxDamage": 30000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 400,
+      "heatMult": 8,
+      "rodCount": 4,
+      "moxStyle": true,
+      "heatBonus": 6
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 66,
+      "baseName": "fuelRodLiquidUranium",
+      "name": {
+        "i18n": "ComponentName.FuelRodLiquidUranium"
+      },
+      "image": {
+        "image": "gg.LiquidUranium.png"
+      },
+      "maxDamage": 6000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 2400,
+      "heatMult": 32,
+      "rodCount": 1,
+      "moxStyle": false,
+      "heatBonus": 0
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 67,
+      "baseName": "dualFuelRodLiquidUranium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodLiquidUranium"
+      },
+      "image": {
+        "image": "gg.Double_LiquidUranium.png"
+      },
+      "maxDamage": 6000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 4800,
+      "heatMult": 64,
+      "rodCount": 2,
+      "moxStyle": false,
+      "heatBonus": 0
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 68,
+      "baseName": "quadFuelRodLiquidUranium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodLiquidUranium"
+      },
+      "image": {
+        "image": "gg.Quad_LiquidUranium.png"
+      },
+      "maxDamage": 6000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 9600,
+      "heatMult": 128,
+      "rodCount": 4,
+      "moxStyle": false,
+      "heatBonus": 0
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 69,
+      "baseName": "fuelRodLiquidPlutonium",
+      "name": {
+        "i18n": "ComponentName.FuelRodLiquidPlutonium"
+      },
+      "image": {
+        "image": "gg.LiquidPlutonium.png"
+      },
+      "maxDamage": 10000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 3200,
+      "heatMult": 32,
+      "rodCount": 1,
+      "moxStyle": true,
+      "heatBonus": 2
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 70,
+      "baseName": "dualFuelRodLiquidPlutonium",
+      "name": {
+        "i18n": "ComponentName.DualFuelRodLiquidPlutonium"
+      },
+      "image": {
+        "image": "gg.Double_LiquidPlutonium.png"
+      },
+      "maxDamage": 10000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 6400,
+      "heatMult": 64,
+      "rodCount": 2,
+      "moxStyle": true,
+      "heatBonus": 2
+    },
+    {
+      "class": "GGFuelRod",
+      "id": 71,
+      "baseName": "quadFuelRodLiquidPlutonium",
+      "name": {
+        "i18n": "ComponentName.QuadFuelRodLiquidPlutonium"
+      },
+      "image": {
+        "image": "gg.Quad_LiquidPlutonium.png"
+      },
+      "maxDamage": 10000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "energyMult": 12800,
+      "heatMult": 128,
+      "rodCount": 4,
+      "moxStyle": true,
+      "heatBonus": 2
+    },
+    {
+      "class": "BreederCell",
+      "id": 72,
+      "baseName": "fuelRodGlowstone",
+      "name": {
+        "i18n": "ComponentName.FuelRodGlowstone"
+      },
+      "image": {
+        "image": "gt.GlowstoneCell.png"
+      },
+      "maxDamage": 10000,
+      "maxHeat": 1,
+      "sourceMod": "GTNH",
+      "mHeatBonusStep": 3000,
+      "mHeatBonusMultiplier": 1
+    }
+  ]
+}

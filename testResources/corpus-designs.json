@@ -1,0 +1,2438 @@
+{
+ "source": "CorpusCodes.java (erp-java-ref oracle harness)",
+ "count": 304,
+ "designs": [
+  {
+   "id": "single-fuelRodUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZllLcfEgQ2bRLoy44bUuvyEBA=="
+  },
+  {
+   "id": "single-dualFuelRodUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZmcwjuzKMBmHBKHCFyyDREIBA=="
+  },
+  {
+   "id": "single-quadFuelRodUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZnUVq+h0HMw82rbLTKPXyWMBA=="
+  },
+  {
+   "id": "single-fuelRodMox",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZoL6yOQeCX7ysMvUghssToQBA=="
+  },
+  {
+   "id": "single-dualFuelRodMox",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZpDf5d/H9jGohuDdt5KA06UBA=="
+  },
+  {
+   "id": "single-quadFuelRodMox",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZp7FAttx4uReXPXm7QnVWMYBA=="
+  },
+  {
+   "id": "single-neutronReflector",
+   "tags": "reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZqyqH9cbz5cUMwrwIoEp3ecBA=="
+  },
+  {
+   "id": "single-thickNeutronReflector",
+   "tags": "reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZrqPPNLFvEnKCR/5V/h+YwgBA=="
+  },
+  {
+   "id": "single-heatVent",
+   "tags": "vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZsh0Wc5vqPx/3zUCjW/S6CkBA=="
+  },
+  {
+   "id": "single-advancedHeatVent",
+   "tags": "vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZtZZdsoZla81tUoLwucnbUoBA=="
+  },
+  {
+   "id": "single-reactorHeatVent",
+   "tags": "vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZuQ+k8XDgmHri18U+F578msBA=="
+  },
+  {
+   "id": "single-componentHeatVent",
+   "tags": "vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZvIjsMFtbxShYXQeLdXQd4wBA=="
+  },
+  {
+   "id": "single-overclockedHeatVent",
+   "tags": "vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZwAIzb0XW8dXN4knY00k/K0BA=="
+  },
+  {
+   "id": "single-coolantCell10k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZw3t6rjBSHoNDZ4wmMR5gc4BA=="
+  },
+  {
+   "id": "single-coolantCell30k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZxvTB7RrNSzC47M5zjvOBu8BA=="
+  },
+  {
+   "id": "single-coolantCell60k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZym4JLAVId94uchDA7MijBABA=="
+  },
+  {
+   "id": "single-heatExchanger",
+   "tags": "exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZzedQau/DpIuj91MOSp3ETEBA=="
+  },
+  {
+   "id": "single-advancedHeatExchanger",
+   "tags": "exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ0WCXqdo+0TkZfJVbqHLllIBA=="
+  },
+  {
+   "id": "single-coreHeatExchanger",
+   "tags": "exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ1Nne6MS5/eaPAdepBkgG3MBA=="
+  },
+  {
+   "id": "single-componentHeatExchanger",
+   "tags": "exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ2FMmJ681KpQEhxn2ZB0oJQBA=="
+  },
+  {
+   "id": "single-reactorPlating",
+   "tags": "plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ28xtZpmwV0F6DFxDwfJJbUBA=="
+  },
+  {
+   "id": "single-heatCapacityReactorPlating",
+   "tags": "plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ30W0pYQrg+7vkZ6RH8dqtYBA=="
+  },
+  {
+   "id": "single-containmentReactorPlating",
+   "tags": "plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ4r775G6msJxlFuDefZyL/cBA=="
+  },
+  {
+   "id": "single-rshCondensator",
+   "tags": "condensator",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ5jhDI1kh3UnanCMr23GtRgBA=="
+  },
+  {
+   "id": "single-lzhCondensator",
+   "tags": "condensator",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ6bGKYkOdCfdQIWV5OUbOjkBA=="
+  },
+  {
+   "id": "single-fuelRodThorium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ7SrRoS4YNqTFpqfGlxvv1oBA=="
+  },
+  {
+   "id": "single-dualFuelRodThorium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ8KQY4BiTY1I7K+oT9PERHsBA=="
+  },
+  {
+   "id": "single-quadFuelRodThorium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ9B1gHwMOj/+wsSxhUsYyZwBA=="
+  },
+  {
+   "id": "single-coolantCellHelium60k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ95anXe2JvK0mNm6usJtTr0BA=="
+  },
+  {
+   "id": "single-coolantCellHelium180k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ+w/unNgE6Vqbu7D8DnB094BA=="
+  },
+  {
+   "id": "single-coolantCellHelium360k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZ/ok128KAFggRQPNJbEWWP8BA=="
+  },
+  {
+   "id": "single-coolantCellNak60k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaAgJ9Gqz7QrWGxjWWyhq3iABA=="
+  },
+  {
+   "id": "single-coolantCellNak180k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaBXvEWZd2b2L8S3fkJ+/Y0EBA=="
+  },
+  {
+   "id": "single-coolantCellNak360k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaCPULmIHxnBBx0LoxhcT6GIBA=="
+  },
+  {
+   "id": "single-iridiumNeutronReflector",
+   "tags": "reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaDG5S12xsyL3nVfx+45obYMBA=="
+  },
+  {
+   "id": "single-fuelRodNaquadah",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaD+eaFlbn9Wtc2z7MQW88qQBA=="
+  },
+  {
+   "id": "single-dualFuelRodNaquadah",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaE2DhVUFjIhjSYIEZn0Rd8UBA=="
+  },
+  {
+   "id": "single-quadFuelRodNaquadah",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaFtoolCveTsZH5cNm/Rl/OYBA=="
+  },
+  {
+   "id": "single-fuelRodCoaxium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaGlNv0xZZe3O9awW0Wu6ggcBA=="
+  },
+  {
+   "id": "single-dualFuelRodCoaxium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaHcy3EgDUqCEy8EgBuMPBygBA=="
+  },
+  {
+   "id": "single-quadFuelRodCoaxium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaIUX+UOtP1M6odYpPFpjjEkBA=="
+  },
+  {
+   "id": "single-fuelRodCesium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaJL9Fj9XLAXwd+sycdG4EWoBA=="
+  },
+  {
+   "id": "single-dualFuelRodCesium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaKDiMzsBGLimTgA7p0kMlosBA=="
+  },
+  {
+   "id": "single-quadFuelRodCesium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaK7HUDarBWtcJBVE3MBhG6wBA=="
+  },
+  {
+   "id": "single-fuelRodNaquadahGTNH",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaLysbTJU8h4R+ipOEje1oM0BA=="
+  },
+  {
+   "id": "single-dualFuelRodNaquadahGTNH",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaMqRii3+3tDH0D9XR68KJe4BA=="
+  },
+  {
+   "id": "single-quadFuelRodNaquadahGTNH",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaNh2pymoy4N9plRgfSZeqw8BA=="
+  },
+  {
+   "id": "single-fuelRodNaquadria",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaOZbxCVSuDYzfGlpsp2zMDABA=="
+  },
+  {
+   "id": "single-dualFuelRodNaquadria",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaPRA4SD8pOjpUn5y6BUHtVEBA=="
+  },
+  {
+   "id": "single-quadFuelRodNaquadria",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaQIl/hymkZufKJN8HYxcOnIBA=="
+  },
+  {
+   "id": "single-fuelRodTiberium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaRALGxhQfk5U/qiFUwOwv5MBA=="
+  },
+  {
+   "id": "single-dualFuelRodTiberium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaR3wOBP6awEK1L2OiHsFRLQBA=="
+  },
+  {
+   "id": "single-quadFuelRodTiberium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaSvVVQ+kV7PAqtKXvfJZydUBA=="
+  },
+  {
+   "id": "single-fuelRodTheCore",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaTm6cgtORGZ2gOeg82muTvYBA=="
+  },
+  {
+   "id": "single-coolantCellSpace180k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaUefjwb4MRksVvyqKOEC1BcBA=="
+  },
+  {
+   "id": "single-coolantCellSpace360k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaVWErAKiHcviLRGzXlhXWTgBA=="
+  },
+  {
+   "id": "single-coolantCellSpace540k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaWNpyP5MCn6YAya8k8+r3lkBA=="
+  },
+  {
+   "id": "single-coolantCellSpace1080k",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaXFO5fn19zFN2TvFyUcAY3oBA=="
+  },
+  {
+   "id": "single-coolantCellNeutronium1G",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaX80AvWf4+QDr1DO/r5U6JsBA=="
+  },
+  {
+   "id": "single-fuelRodCompressedUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaY0ZH/FJ0Ja5hWXYNDWpbbwBA=="
+  },
+  {
+   "id": "single-dualFuelRodCompressedUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaZr+POzzvUlvW3rhaaz98t0BA=="
+  },
+  {
+   "id": "single-quadFuelRodCompressedUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaajjWeidqfwlMY/qnyRSd/4BA=="
+  },
+  {
+   "id": "single-fuelRodCompressedPlutonium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvabbIduRHlq7bB6Tz1Jum/R8BA=="
+  },
+  {
+   "id": "single-dualFuelRodCompressedPlutonium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvacStk9/xg2GQ3bn9ChL7gkABA=="
+  },
+  {
+   "id": "single-quadFuelRodCompressedPlutonium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvadKSsNubcBRGs88GP4pQB2EBA=="
+  },
+  {
+   "id": "single-fuelRodLiquidUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaeB3zddFXMb8ieQPdQGkjIIBA=="
+  },
+  {
+   "id": "single-dualFuelRodLiquidUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6Vjvae5c6tLvSXmyX/kYqnj5EaMBA=="
+  },
+  {
+   "id": "single-quadFuelRodLiquidUranium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvafxCB86ZNixoNg4h3/BNlsQBA=="
+  },
+  {
+   "id": "single-fuelRodLiquidPlutonium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvagonJMpDIt8eDCMrFWeiG+UBA=="
+  },
+  {
+   "id": "single-dualFuelRodLiquidPlutonium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvahgMQcXtD5HT4jg0St72oQYBA=="
+  },
+  {
+   "id": "single-quadFuelRodLiquidPlutonium",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvaiXxXsGW/ESJuE09gFZLJicBA=="
+  },
+  {
+   "id": "single-fuelRodGlowstone",
+   "tags": "other",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvajPWe71A6Pc/jmJGtc2fq0gBA=="
+  },
+  {
+   "id": "named-empty",
+   "tags": "empty",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ApjE6sQ4TCWaLQzJ67EAM6gB1MtplT6/C9RfU9Kx3syWzKnq7K1oNrDvX1h7tHQABA=="
+  },
+  {
+   "id": "named-single-rod",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1YhwmEs0WhmT12IAZ1ADqZbTKn1+F6i+p6VjvZllLcfEgQ2bRLoy44bUuvyEBA=="
+  },
+  {
+   "id": "named-single-rod-preheated",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BTGJ1a2duOauf/fUmjblJhiuGqfb00nxs9Knr1/ab2yOnaj87eoQ6yvvrdGxyKmEBA=="
+  },
+  {
+   "id": "named-reflected-rod",
+   "tags": "reflector,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=UxidWIcJhLNFoZk9diAGdQA6mW0yp9fhjmm+mitAK3Dy5JK4OAM4j3CrKnv3GGrkBA=="
+  },
+  {
+   "id": "named-quad-cells",
+   "tags": "cell,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=UxidWIcJhLNFoZk9diAGdQA6mW0yp9fhokeSugBEfU/qhbfNeSSVpiS6/T/s6qfYBA=="
+  },
+  {
+   "id": "named-rod-vent",
+   "tags": "rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfE/awiqTHh2RBXv2s/HLcTIMBA=="
+  },
+  {
+   "id": "named-core-exchanger",
+   "tags": "rod,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfYzVZ1enhcplKTvYx6QDjjLcBA=="
+  },
+  {
+   "id": "named-core-exchanger-quad",
+   "tags": "rod,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=FMYnViHCYSzRaGZPXYgBnUAOpltMqfX4XqL6npWO+xmqzq9PC5TKln8F6JkiG0EcBA=="
+  },
+  {
+   "id": "named-side-exchanger",
+   "tags": "rod,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfU1wExtwPdsHiHvew7OR7sxMBA=="
+  },
+  {
+   "id": "named-advanced-exchanger",
+   "tags": "rod,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfW2R5iFpMThMB4yED1eFYqicBA=="
+  },
+  {
+   "id": "named-spread-exchanger",
+   "tags": "cell,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=UxidWIcJhLNFoZk9diAGdQA6mW0yp9fhokeSugBEfU/qhbfNeSSVpiS6/T/s6qfYBA=="
+  },
+  {
+   "id": "named-condensator-small",
+   "tags": "condensator,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHezLcoWh/zIcXCFzVmw3WK0JoBA=="
+  },
+  {
+   "id": "named-condensator-overfill",
+   "tags": "reflector,condensator,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=UxidWIcJhLNFoZk9diAGdQA6mW0yp9fhjmm+mitAK3LJayWLFF0NU1HqvYB2VIxMBA=="
+  },
+  {
+   "id": "named-condensator-overfill-big",
+   "tags": "reflector,condensator,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=UxidWIcJhLNFoZk9diAGdQA6mW0yp9fhjmm+mitAK6s8MOPtZfMQCQdgJrU9sWJcBA=="
+  },
+  {
+   "id": "named-condensator-over-capacity",
+   "tags": "reflector,condensator,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=UxidWIcJhLNFoZk9diAGdQA6mW0yp9fhjmm+mitAK58Tt4e4ttaw7bT4F+zTvOV8BA=="
+  },
+  {
+   "id": "named-lzh-overfill",
+   "tags": "reflector,condensator,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=UxidWIcJhLNFoZk9diAGdQA6mW0yp9fhjmm+mitAK6s9trYB9tFivkVpeF/sFdMkBA=="
+  },
+  {
+   "id": "named-lzh-small",
+   "tags": "condensator,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHezLdZFGKFPZAYvvaQ+MtXXrMBA=="
+  },
+  {
+   "id": "named-the-core",
+   "tags": "rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfBv3Ke7EjjIx+gVoUEgr0ArQBA=="
+  },
+  {
+   "id": "named-liquid-uranium-quad",
+   "tags": "rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfB8BSEXRuflJwNoCU/pGTSoIBA=="
+  },
+  {
+   "id": "named-compressed-plutonium",
+   "tags": "rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfB5aiuoFwuDpOtEF5XiuVux8BA=="
+  },
+  {
+   "id": "named-coaxium",
+   "tags": "rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfBkkoAumCh3lCokicWvupQAcBA=="
+  },
+  {
+   "id": "named-cesium",
+   "tags": "rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfBnLXWdyATZFkJIe3+2Gmz2oBA=="
+  },
+  {
+   "id": "named-thorium-quad",
+   "tags": "rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfBZSFiiHhgmYGwzcko+xefVoBA=="
+  },
+  {
+   "id": "named-rod-vent-fluid",
+   "tags": "rod,vent,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTs8d5lzhEZG/y0ZeLt2phVYf5zW5gG4XrPNKIEhV622RsiD15mDmEKV4nTU0cBA=="
+  },
+  {
+   "id": "named-rod-vent-pulsed",
+   "tags": "rod,vent,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AxfYx/7yWelUAffeqcEMomYMBXdKxG02NTjZD/+x4MppTf+LnjQhvL3C/+s5wEA2nHf8vE69rzJkDQQ="
+  },
+  {
+   "id": "named-rod-vent-preheated",
+   "tags": "rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTq0ik4X+f7QCI0wNX7M0G/MczUi2pmZBa2uJ5hwyY6fxnwWhBfyaR42IXBbWMBA=="
+  },
+  {
+   "id": "named-quad-cells-plating",
+   "tags": "cell,rod,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AKYxOrEOHoJpgkONKy9eIRvVKJ4+Ldt9n0klAr7hvNQOZK9OWGgGJKMJTghzyB6q2AQ="
+  },
+  {
+   "id": "named-quad-cells-automated",
+   "tags": "cell,rod,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BoeJWSXLfWAx70viSmyHf8s/6aU4YbBnyCxmXrdE9GAtROlLjXwj3QKmLGaZjvTH1swQcKmN23ZL2ARvkH8BEtZNwc6WBImSdtVIXefq9RwcOCYvxgQ="
+  },
+  {
+   "id": "named-condensator-rci",
+   "tags": "condensator,rod,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTvH4R/dogFKy99GsWoDS7V+JNReHEB7pZKlpIpr4c09wyoMboLdfwheaN43iIBA=="
+  },
+  {
+   "id": "named-gt509-quad",
+   "tags": "rod,vent,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfE/awiqTHh2RBXv2s/HLcTIMBA=="
+  },
+  {
+   "id": "named-gtnh-quad",
+   "tags": "rod,vent,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfE/awiqTHh2RBXv2s/HLcTIMBA=="
+  },
+  {
+   "id": "named-gtnh-mox",
+   "tags": "rod,vent,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=CmMTqxDhMJZotDMnrsQAzqAHUy2mVPr8L1F9T0rHfFsk6bcNLm7Ew20OL2LAHVzcBA=="
+  },
+  {
+   "id": "gen-000",
+   "tags": "rod,exchanger,vent,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIglIFS6Ey/fTCYf3ETFmE0MDzjmAsk/eCxkoSjhjGrcu8mlrMYtr3N/CEnIor7wBA=="
+  },
+  {
+   "id": "gen-001",
+   "tags": "rod,plating,vent,cell,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIglDUOhC/BB+FohHGZlCsdM2upebFODgQ4iw3DK4k5W50CIhmd3sR6HlFjXmCce7AQ="
+  },
+  {
+   "id": "gen-002",
+   "tags": "rod,vent,cell,exchanger,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIKWiP1kr8xOyAXlGXA/3tSEmLcCxL7QpBthdn6x0hNpL4ub3Eb0pelbvBoJXHCgBA=="
+  },
+  {
+   "id": "gen-003",
+   "tags": "rod,vent,condensator,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglL5eBq6bBP7xHwILO5phqqNHALs/cIqfqKSJBSa53nnIT1jaAbX4nxW5n1AAgE"
+  },
+  {
+   "id": "gen-004",
+   "tags": "cell,rod,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=KIt4obC3KWewtL8VM1xjj3rnB/udJlaHbwSqEIpZGAe7QWi9x8o7vFSZ5RuJvl9g4/1MbGp/UOX1BA=="
+  },
+  {
+   "id": "gen-005",
+   "tags": "cell,rod,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BRFwoCMBjIa18az6EO2NtVL8P6LrEffycSHYUqAhq+DrvHBaJ9jPELrQQYCgQV4OESyZ5TE6KSxBBA=="
+  },
+  {
+   "id": "gen-006",
+   "tags": "rod,cell,vent,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AoaU1FEbDp7CVUrisCd34vfUsVmJ/5qyfpHHge4Nis6OPvSuoA5rinjBfBBMmFq6RNPSJD5W+UmVqy/daGaHZ5T61LI99ryUeGWGvgQ="
+  },
+  {
+   "id": "gen-007",
+   "tags": "rod,vent,cell,condensator,reflector,exchanger,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIgnOum6sRih9TZEgw2Sa7sI1FNklUL5xkuynBpbRsET8jpIpeKD7Q2x+3fzmdAERAQ="
+  },
+  {
+   "id": "gen-008",
+   "tags": "cell,rod,condensator,plating,rci,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=IgpaI/UzpoxkyE9VzUQwU5XDMEXa9vlMGbhyA/QyzafHaYiybC5tEgMohud1wCwoBA=="
+  },
+  {
+   "id": "gen-009",
+   "tags": "rod,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKGodCEUNrzABStOqzfMmGsHQV8pVmaz7hjwZtme9K3kRvjPkslOGs1sj9GIoE"
+  },
+  {
+   "id": "gen-010",
+   "tags": "rod,cell,plating,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKGodCEt/6DPzzbU7Q3bSfUePqdpe9Se4R3wfl78cud88bv9KKUGQT759af2wqhAQ="
+  },
+  {
+   "id": "gen-011",
+   "tags": "cell,exchanger,rod,condensator",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EQSjbbTyOWLdTHubCWgOD8UO9kSMUDmz0L0K5SvJz5k89t937JIVa5X+SfNQxo2cBA=="
+  },
+  {
+   "id": "gen-012",
+   "tags": "reflector,rod,vent,exchanger,cell,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=FDSjPuHDmOQzVkdh+9EPGhsU70EG22bO6pKN9ITQhnJ+V8mQjWtoI9fuK5EdVOdTCuYg3OoDLLUK0ZSwvl4XDY8XHQmxh9dxdie2BA=="
+  },
+  {
+   "id": "gen-013",
+   "tags": "rod,plating,cell,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIglDUOhCaI9wY00Noyh6QYN+65oGHxCQ9ZcxLpDA6Bt/YXcfbB2lVweLjNfu0R4bAQ="
+  },
+  {
+   "id": "gen-014",
+   "tags": "condensator,rod,cell,exchanger,fluid,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AZnFwOdfsM8jmZR4ckohQPW45vat9BND5DrGswtU98Tpsc8BEXOd6doN8jC2yvfCy21M+TPNP6M6fU7s/j18BA=="
+  },
+  {
+   "id": "gen-015",
+   "tags": "rod,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCUd9NG479nYYlv3/+WtfAsaf7kRga5RqAqNLvwn73L2AJamGDx+EGqjk6HsKAE"
+  },
+  {
+   "id": "gen-016",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EQShqHQhFDa8wAUrTqtDTOrTAixWDtCQmGbfTtLvlJwpJLUyFqN8E2UD6qwtDfwE"
+  },
+  {
+   "id": "gen-017",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKH33LaZqDBz1y3FiZPr8RWadVmeMWPTkQ9DUAU823Y80E5KUT2WQf/1yL0MAE"
+  },
+  {
+   "id": "gen-018",
+   "tags": "rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIglHxvZpS5DLLQQZXP69Vra7fkXJt47A8VApsoSMpvSRX8H2saHAe8HPb2xDRMkBA=="
+  },
+  {
+   "id": "gen-019",
+   "tags": "rod,cell,reflector,exchanger,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJ0y9MSE5tj6dxe3tG9dtSDEa1Z6DmEC49+oG9XL5Unmq06m1TizGFUce5fHRLYBA=="
+  },
+  {
+   "id": "gen-020",
+   "tags": "vent,cell,rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCU4fawtyXTTn3IDp+qzfWmWwjSwZUAL2w/BFcYkTxb4VsY09nIUnb7U3H+jQHIBA=="
+  },
+  {
+   "id": "gen-021",
+   "tags": "cell,rod,vent,reflector,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AbfvXJchQQeNwqSHya0OV0tAyBKyccRwlv2gkbv4DMMfuigpG3uqZyg1WHDOzq9+I589BJsMgXqgs+SIBA=="
+  },
+  {
+   "id": "gen-022",
+   "tags": "exchanger,rod,cell,plating,fluid,automated,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AoazcQgeJ/88AqUWqOSarUqPSdq8YVk043Gs0alT7l2p7Tih/j9aA8AUt8wbAplbvKIj0yG4ybBBbFN6mh2Hab+h1YR0v8Cm/g6OBA=="
+  },
+  {
+   "id": "gen-023",
+   "tags": "reflector,cell,exchanger,rod,vent,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AURankWMADfYqWUekJxubUk8ZzcRtNQkyLAGD3EfTFHgntPlZCZCm+KG0JdaCT7zxAdIuMTzCgZPqQQ="
+  },
+  {
+   "id": "gen-024",
+   "tags": "rod,cell,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBKGodCG69Tx8aUw86n2WVdydTdN85oyrBqpuLOHflz6tqt+Xl03OvWhADveQYt4BA=="
+  },
+  {
+   "id": "gen-025",
+   "tags": "rod,cell,exchanger,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0U17KeQ8g/0cZaOLd5xX4sMJaU6rj7mtHlbvz+CGWNF4Nyc3J2HXjlQ7xcBA=="
+  },
+  {
+   "id": "gen-026",
+   "tags": "vent,exchanger,rod,plating,cell,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AVZU87BF91Lg5IHFAFaB90JsY/+nnSWQlDZEsFgR5YyXKj/wgoKugu851lHNpv37raa92d7XI++2YokRn08UvOOVNT5VitiCljBLUBXr7Yfq4iRZMgQ="
+  },
+  {
+   "id": "gen-027",
+   "tags": "cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=fstvGVWhGyqQQjtLAF9YVm8xdQ+APX54DDsjbQneJIwtY7zj70FPc0CNoiPK7QFRCowE"
+  },
+  {
+   "id": "gen-028",
+   "tags": "rod,cell,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EQShqINAmB89N5BsgfRiNpPpcA1fASccNgHs7Rxtfv/P4DP5s4IhHIic24rLGsAE"
+  },
+  {
+   "id": "gen-029",
+   "tags": "rod,cell,vent,plating,exchanger,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=RBKGodDGJtcE2A+ANLOTJSey19FHHniF8A3BcQ/Rqzv1sgypncJpkdH3OploS8gE"
+  },
+  {
+   "id": "gen-030",
+   "tags": "rod,plating,cell,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIglDUOhCKG16aBFN2QRGhjSMVpIFL+YGtBrVOWNxSaWgyrVzCkkG+OtDJWc2gO8BA=="
+  },
+  {
+   "id": "gen-031",
+   "tags": "rod,cell,condensator",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BmbJ6cbPDAfzgwAfw+5dOhOnhS1XiMRhp8bO4XTaaq/PFL0JZbuY3eYQbktL1gbLT2MM5bZ0PM/+tj05dFeUBA=="
+  },
+  {
+   "id": "gen-032",
+   "tags": "cell,exchanger,rod,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=A2/fxSzZlzb1kke2ni0ASPUIG26wdSq6vc0SEmAJRmuSzm0HLin5zGSmOMmZXGBKSQbfnYot+hOyIJQE"
+  },
+  {
+   "id": "gen-033",
+   "tags": "rod,cell,condensator,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=Aoi1mZLQwycqJCWo2aqDJ2jDGmZts/v19Fhcdlrcpi8o9ajShgjVpLKcoRxH+2M/hpT4qvLfCYHRBA=="
+  },
+  {
+   "id": "gen-034",
+   "tags": "cell,exchanger,rod,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=dhgX0avDdXwvpIpBmoJ7SpvAXvUCDac1Lpsb9tZxpklsqfhykJFnqcThbpoK5nxgJDzCSuFABA=="
+  },
+  {
+   "id": "gen-035",
+   "tags": "cell,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJQ1DoQihteYAKVp1Wb5kw1g6CvtmWQZUp0A25TkD9mzbOrMroxnqykJIfnqPAE"
+  },
+  {
+   "id": "gen-036",
+   "tags": "rod,condensator",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglJe9uxzUI/lSZ2mjk9KVDVRWUKLYr4FggUxQcAGk9M3AeAhhK1YwP/82TjRUwE"
+  },
+  {
+   "id": "gen-037",
+   "tags": "rod,exchanger,cell,reflector,vent,rci,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=RBS+VINjm5jzhpBtApJ9UOW5RixW9WUtBlaqQ+9U1rSRJ5zCek8g7rgr/GKDCYywBA=="
+  },
+  {
+   "id": "gen-038",
+   "tags": "cell,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=URacVXwAXa+IXYUVGVkrtIquqhbDKtsM3cp0pvhJAgUL0wtAkNlg2QYdEGu+L3j/ELHwwMMt6tUE"
+  },
+  {
+   "id": "gen-039",
+   "tags": "vent,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBS0R+osx8cCMt1iHWcRyOJCseOZflSn6y/ygj1kLRpBTVUstmNO24IoHMAqTQE"
+  },
+  {
+   "id": "gen-040",
+   "tags": "rod,vent,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=D9lt4yq0I2XT9VM6FAHtJonXAf4S2g3omYok2+iUfZVYVpniEhcTsBdH/NFCGxzNAY58BA=="
+  },
+  {
+   "id": "gen-041",
+   "tags": "rod,vent,cell,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ANv7LkcjahP0CuwiX+PwkUQXAHmpc+zHyduMS3MnFHS2vbPFDepxr/YAn6AdymAaQHxNa+wAdQSOSCp4BA=="
+  },
+  {
+   "id": "gen-042",
+   "tags": "rod,condensator,vent,cell,exchanger,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=FEW/CWz5sdCi6w4gvLFHEwca5r1GjKHLUyo+1f82voD+RpJPL4rL/ey2CwlbLn1NreT+Xg7Kb56KbQQ="
+  },
+  {
+   "id": "gen-043",
+   "tags": "rod,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=fstvGVWhGyqQQjtLAGBXyIMplFUGFGRmcYQK36pYr1Xvco5eR83mbUh6Pycdw7gig7gE"
+  },
+  {
+   "id": "gen-044",
+   "tags": "condensator,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglJRp8qcV6V2Z9VEGiKfNWuoJ5xqLqUIJaIbXybZbaZlqpBcWvHZYYcFJ21opAE"
+  },
+  {
+   "id": "gen-045",
+   "tags": "rod,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=AiCUNQ6EIobXmACladVm+ZMNYOgr5SrM1n2lJYcGSn7F8+sz6fN6QfJ4QrkZ2YgE"
+  },
+  {
+   "id": "gen-046",
+   "tags": "exchanger,rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJQ1DoVkZBlBXM0nB2t2lKg2SPvSVt1yXi1ScUMy+q0pcEhy5yIsyilOL+b9vQQBA=="
+  },
+  {
+   "id": "gen-047",
+   "tags": "cell,rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJSBPEkHVxVF1VhbPR1b0FWwAx/6XuZry1myfi0u8VXb+NtbNXuji1OnSRB6QmkpAQ="
+  },
+  {
+   "id": "gen-048",
+   "tags": "exchanger,rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJQ1DoQi6qSFS1557fqU8aTtp9AE4TBclfdQ9uLKXtCYsv5goaKXraglz/84PFQBA=="
+  },
+  {
+   "id": "gen-049",
+   "tags": "rod,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEFLRH6izHxwIy3WIdZxJCi3XeAh4s0cPDjLSN5eRsHEunDjGig835IlpR2gY+AE"
+  },
+  {
+   "id": "gen-050",
+   "tags": "rod,cell,reflector,plating,exchanger,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKGodCEUNr1EoSEzRxpv1wRSWdnGVvQBTqmtfaP1h58IBbUPi+z9764ktDgaPWTAQ="
+  },
+  {
+   "id": "gen-051",
+   "tags": "reflector,plating,rod,exchanger,cell,pulsed,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EZXoRPb4Hnv+Yl3Pr1M8K/oarOr7oOvu1aQH4sG/Yw2Q13RtRSQwsdutXvZxI2IIjLv+ogKatMLA4w9DwX/SRvUE"
+  },
+  {
+   "id": "gen-052",
+   "tags": "rod,pulsed,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BRGaf0rPBowCB6tWXreUwcvqdb+8n5WJgJAuVhXtwrzbPmGpHO/R+hozIjpxvK+FnmZHRlyYkLv1BA=="
+  },
+  {
+   "id": "gen-053",
+   "tags": "rod,cell,condensator,exchanger,vent,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=Ms5l11VsBSQULCwFBS0jcOIgJ97jevy76zrg2Jl4XUENZ3sfGaR0pHg01AoWjKWRWwo8VP5FOuHxkMU7u14RWYAKafc+I+5kkXSI+0e1vZgY0IsIkOK3Iw5Ewb9j4mkwGBxkMh82clfNE+2hb64upgQ="
+  },
+  {
+   "id": "gen-054",
+   "tags": "rod,cell,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=SBTmWN46hNXfjUwHZ2uDSIot1+JykB1xgAlb+W3ffRywLWwX/URveiWkqHOSIms+1qylucfCkmYE"
+  },
+  {
+   "id": "gen-055",
+   "tags": "rod,exchanger,fluid,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AlwyqG8eFJsS1VkEUTuWYknC0ePfECLFdD6OR1iGc+9ZqmP38rFsPvqPQ7nTyALBbjDGIebpmXOo54f/NQQ="
+  },
+  {
+   "id": "gen-056",
+   "tags": "cell,rod,vent,exchanger,fluid,rci,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBXLGvcDER+wWXWKWbY8D3GwG8XLsEZsUDtqAJ545rdf+3I8wICSAxDHhi1t6XJ5AQ="
+  },
+  {
+   "id": "gen-057",
+   "tags": "cell,rod,pulsed,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AVd07vfe6dyHaq23dWE1mGAOibKKTr10Zgfs20jQQLGCevxHk+6+AZhbl+9A75EM5JIM3wE30UQxApfwW1C1aQrHBA=="
+  },
+  {
+   "id": "gen-058",
+   "tags": "exchanger,rod,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EgU8+EQJ3TnqC2ZuTZCYnUDXm4c/06EECO24kmLCVyK6SIOgFdkrtYZNKeq1lEZwjCysx15/M3YE"
+  },
+  {
+   "id": "gen-059",
+   "tags": "rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCUNQ6EIobXmACladVm+ZMNYOgr5SrM1n2khJC/ljZT9yHiGLumN37i17cXgHgE"
+  },
+  {
+   "id": "gen-060",
+   "tags": "cell,rod,vent,condensator,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBKGohdwYy71MeUMegrRsMkUSBkm2YL5vHckWap2381R68RT8iMa4LemCgPyPu30BA=="
+  },
+  {
+   "id": "gen-061",
+   "tags": "rod,condensator,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=G36EjVrIj9mg0PBXJjwKfmXjv3WKtOiNRq7NXOUeJkD4+Vggb2qaLUoddmqmO4DZtlL00+QQVgY3+GQE"
+  },
+  {
+   "id": "gen-062",
+   "tags": "rod,cell,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IRQ3+DrTETkAo9bxnNd3GU8AkH3jbCQw149PLcLX7TszxdKpFRScpVoAE"
+  },
+  {
+   "id": "gen-063",
+   "tags": "rod,exchanger,cell,condensator,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKGodClO9jvgfZy3OCEhR4vnrgtbZUb1FBb8DPW7gexD9eTZYT8LQzaEBmA44sBA=="
+  },
+  {
+   "id": "gen-064",
+   "tags": "reflector,cell,exchanger,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AURZxCS08qv/tscoy2x4FA4NNn/OhsoAtpql36UreQtBDFwI9euyNDplHifscq12JaM6D6DD0JUhBA=="
+  },
+  {
+   "id": "gen-065",
+   "tags": "cell,reflector,plating,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=A2/RJjOS/NdJTR3UgO54xNIDFHKHpMoZkFlNlU6pLVSmR9Pg5ORPoPEuxbiy1Irgj0K3NiBsUBpbNegE"
+  },
+  {
+   "id": "gen-066",
+   "tags": "rod,cell,pulsed,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=JcOaAoYKT79FjDPI2c0Eg/Z1wEFP1iZW9CIhOXkv3Kr8IB/OY4atGJGSDyX9+A3F0UoaUoaDOTEWuEXtBA=="
+  },
+  {
+   "id": "gen-067",
+   "tags": "rod,cell,exchanger,automated,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=Aqy/N3VehAE17qRL4Quhs1gLq6MvOoxQnXw6lucSGJdvkTd5SuG/Osx8IOaGL4zDPK19tH1ziMxoskJxJ+8rxUPnmgvqGcfnmHKKcjxQphO0kueCBA=="
+  },
+  {
+   "id": "gen-068",
+   "tags": "cell,rod,plating,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AOwwL6QMdiE3zoKEingNir3IK3BODo4vsWn8WrWvfT9eJd0+aVs+pA4MFgxkh4BGtKaFVts77iQE"
+  },
+  {
+   "id": "gen-069",
+   "tags": "rod,exchanger,vent,cell,pulsed,automated,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AMCTIEu29QXVuGQ9CEZJbuXON5RBcLqlVk+ppo2E1JVkOe2E9KiPTVzSRU83nPENOf7VjoBTkDdCE5Iqmxc3uSP4+FPvOVqScpBAwOS9hYF0qvq4s1sE"
+  },
+  {
+   "id": "gen-070",
+   "tags": "rod,vent,reflector,plating,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCUNQ6EIobXmACladVm+ZMu67HOz2r1lpF5gGotOLZ7udHRXBl2SYVL/vX1xs+sBA=="
+  },
+  {
+   "id": "gen-071",
+   "tags": "rod,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AOwsaEWDeIa831YAVJMpprXvOArkdtR5obGr9guu/rc/L2NVKeenmbLL6zMestD93cLtw1k5mAQ="
+  },
+  {
+   "id": "gen-072",
+   "tags": "rod,cell,exchanger,reflector,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEFLRH6izHxwKexMrPtER+u32hnpp29WsAfkBmrREVWIMsdLcQGSGFT40mZpaehkBA=="
+  },
+  {
+   "id": "gen-073",
+   "tags": "cell,plating,rod,reflector,vent,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=KItypmLv/wYJdGsScnAgYFJhzjip1iTV4P5I8ifvjwBBesMTsqOYzF2DnddIQWJyXZh674M+NVApEQQ="
+  },
+  {
+   "id": "gen-074",
+   "tags": "cell,rod,plating,vent,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBOddN2EcE5LQygjIsPRLK5orsoxwlN+41ZTD0gu8iZbDu8lDBDsnqTF7m8H/nwE"
+  },
+  {
+   "id": "gen-075",
+   "tags": "rod,cell,vent,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKQ256O02XIBZL4zb0Dq27hedK3JPrxdcoKK2dINZE7ZwXlA7/Hej2WcpW37Z4BA=="
+  },
+  {
+   "id": "gen-076",
+   "tags": "cell,reflector,rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IUeFC3AjMUcHPqI5ng7XQ8M3XM4yC64OEYTSFx3O2KD2ZPw4D/sAK0+M0BA=="
+  },
+  {
+   "id": "gen-077",
+   "tags": "cell,rod,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglDUPmUBXOTdaknsczENdD5t5A3Axv72Diwxe+sIPthQpG49JJ/UzuKjn8JT2gE"
+  },
+  {
+   "id": "gen-078",
+   "tags": "exchanger,cell,vent,rod,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IgnOum6sRih9TLyD1hSvRmIyJFNJqKiHqid1zyPiKIxPBg3nc9zXdcP0U0I8L1gE"
+  },
+  {
+   "id": "gen-079",
+   "tags": "plating,rod,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=P2W3jKrQjZ52oumCka7wBTsHg0C52mpFIiS6OGgrAGEPKlqNKlatadPedcZIpFeAQHnYBA=="
+  },
+  {
+   "id": "gen-080",
+   "tags": "cell,rod,condensator",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EQShqHQhFDbT+pnQBclk+kXI+ye9NKCU2K0eWmoBIezEyUBogoqRI5Elcu9fwSwE"
+  },
+  {
+   "id": "gen-081",
+   "tags": "rod,cell,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=Adhgt05JjHgPBnl7XchlhaS4jDW1+6dzAO9XbXaVW0+lXmmkkpt5gGZAlKCM4SQ+1Tvq4vNtrAQ="
+  },
+  {
+   "id": "gen-082",
+   "tags": "rod,reflector,cell,exchanger,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=Db9CRq1kR+Vras8kv0unLESAn6cH3l4l419EK0O4gd+3nmieJ8EMTiuykU3sXXbI4Xh9OKTmEmJMJFQE"
+  },
+  {
+   "id": "gen-083",
+   "tags": "cell,rod,vent,exchanger,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AUNKZJYK2XTzz/RHtWtbkSMtzW49iODSEsmK+S7syITxzBa0kq3wC2BOp3PdsudF6Fhg4Ll38Kya7RFRjiWX1QAVrGQxrFFL19jkugQ="
+  },
+  {
+   "id": "gen-084",
+   "tags": "cell,rod,vent,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=URakFLliiThkikWEL8zI5jIKskXDwZr9kPzzQNrdwOzNqNhkWIyCmKQ6KhaBOmFpb089sAzodgGZBA=="
+  },
+  {
+   "id": "gen-085",
+   "tags": "rod,cell,vent,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IgnZsubNDoQ1eG711tu8QFHaIgGkc7KRKtOMJ8I7sq2u+uG47zc1SojG8TvT6Z5oBA=="
+  },
+  {
+   "id": "gen-086",
+   "tags": "rod,exchanger,plating,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=OwsaEWDeIa831Ykb3RCaqRM+/h428JAhvuTyL5gprx5iRAnSb8PklKddshVT/JXex/iVDrh8FAQ="
+  },
+  {
+   "id": "gen-087",
+   "tags": "rod,cell,condensator,plating,vent,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=KsqU60I9X3EZYWiUS+smg6JW2ClYDY89d4bPhsY8STR2PVYJEQRsayyPfXagexsZ/uCcr/J/kjnnYPN2V/lHO47Q+CDYHU+gzIeLK7OtOwuvWWNOBA=="
+  },
+  {
+   "id": "gen-088",
+   "tags": "reflector,vent,cell,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=JAp86lbrXtymWkMPpU/Vvg2WrXK2UQ1A69XTJnBdnsVDs7odD9KtnShn5PME7PtzN57px3fGDwYE"
+  },
+  {
+   "id": "gen-089",
+   "tags": "condensator,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IRQ2vMAFO0O3HmkAc98moRYql5h1p7mfV3zp85DRIljRmY31IYEo4vGAE"
+  },
+  {
+   "id": "gen-090",
+   "tags": "cell,rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IRQ2vMAFK06rN8yYawdBXylWZzVPuD2Btog2BHuaCub3DQntBGjQSyQAE"
+  },
+  {
+   "id": "gen-091",
+   "tags": "exchanger,rod,vent,cell,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=FqfkdTSCuTgosOvzaY3rc3BL5jwEwnvmPWHSlkrbXDKWfwEUYS5M3mxwT6dI/9lQSa2uj0bDSKgA/TVyYghGAXOTm5spBuR837VNJ+PjOBmnWWonQrTeoH6ppHCUegQ="
+  },
+  {
+   "id": "gen-092",
+   "tags": "condensator,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EuFSv3qW34wwB9MzmjIWASvWXbVQiHdhYjmI1tgh8E14b6oku0kGJlS1jPQYkt3zAmkaY05yQ03ZgJYFBA=="
+  },
+  {
+   "id": "gen-093",
+   "tags": "rod,condensator,reflector,cell,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCUhHcZ/8BGoqhLdVWgC7PYRfH5Ssn7YSnvXPK4leAquKgK0C9Vwu9WYmlaNF3LsAQ="
+  },
+  {
+   "id": "gen-094",
+   "tags": "exchanger,cell,vent,rod,plating,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CiLetPSl5kk/lbpPalmGPUB2q+C87Zd/jftnJrQfQuugq5K3mmg3i7LXgUKJawUbpNWIDLyPKIPcVQQ="
+  },
+  {
+   "id": "gen-095",
+   "tags": "plating,rod,cell,vent,exchanger,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIMCAB7oGfJcrgMJWzUNye4rsyQasLrxySbfBR8K+Xfi/1OZrEH5CjQuEIf4UkVklWo2RrkvUUuG7qaqJwleQyNPuexxBA=="
+  },
+  {
+   "id": "gen-096",
+   "tags": "rod,cell,reflector,vent,exchanger,plating,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AMs51Ka9HW/Yy2SFrUItx4WhbhFl5IAbbehPD3jsBcliYzS3YS0ZCZqqr/kAQoZyCyS/D490CPb5js1D5wL+aOfNzCtOEONffzq8Ki36PObGZqEvJwGyIhQ6WK1337wFnp1k80Lo8AkDJAfsu0mTJn4E"
+  },
+  {
+   "id": "gen-097",
+   "tags": "rod,vent,cell,exchanger,reflector,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoyFFvFkpWs6/Kl9mj68j/je4l96nq1+1vRAPqVRBZ5MEP/jVgKFSKc8HGQQTcBA=="
+  },
+  {
+   "id": "gen-098",
+   "tags": "cell,rod,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEpQBmeEc3KsVdWQvhsFSKXG18fpqiWS/nwuEkc848RzJ5yRnyvFiT9gyjp6XwE"
+  },
+  {
+   "id": "gen-099",
+   "tags": "cell,exchanger,rod,condensator,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglLGd+jNIAsAelDPNzmiEDO+dmYQhQqHfa0oqwfHdMV9SvBvr3Yw6P+U0/mx4pYBA=="
+  },
+  {
+   "id": "gen-100",
+   "tags": "rod,condensator,reflector,cell,plating,exchanger,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CiLg9KG486kjdk6g2xp/Hl33pNlt5MW09vU8eQMgA4rbOYXwm229Gc7IsxeCFKT8zHNtToSq9MKB0QQ="
+  },
+  {
+   "id": "gen-101",
+   "tags": "condensator,rod,cell,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=B2GDBXcL0SYcwLGdCrDJMLB3+XSnlZN2XH95Glbj4Vq6icEEYwyvls+P7u5nPTkILwN7nYzlfAQ="
+  },
+  {
+   "id": "gen-102",
+   "tags": "vent,cell,rod,pulsed,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AWuu8JBatN19SN5EPTsvZ5mEqbYduBLcwo3GGowKNuaO2YZxCH3pGcRwbmpTWlU/bBnfMxrsUteHYp3yhOkIxqv6RD7CtXQCH2NTAwQ="
+  },
+  {
+   "id": "gen-103",
+   "tags": "rod,vent,exchanger,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJTkV8WO9iEupTHN8lYMlR+PxueYfX8dkZiT4xtwZI7/B6EjuLLExRunCMeSMQE"
+  },
+  {
+   "id": "gen-104",
+   "tags": "plating,cell,rod,exchanger,condensator,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCc66jfZOPoqwzrMJxMJD8fQOGpjsZAgOlDMp8batbeCOOqsjcTTmfOwVzoyQHShAQ="
+  },
+  {
+   "id": "gen-105",
+   "tags": "rod,condensator,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=AIglDUOhCKG2n9TFtFA2g8jXvM+JFimnzwKiyAXDSBiA2GOja/7dORkbOZBIfOhYBA=="
+  },
+  {
+   "id": "gen-106",
+   "tags": "rod,cell,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIglDUOhCKG15gApWnVZvmTDiiESnZCRIljZ1s+fIwW6OteQZwbfTS60UixsaO64BA=="
+  },
+  {
+   "id": "gen-107",
+   "tags": "rod,reflector,vent,cell,condensator,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=FEW+GolbnPPl2Q1FJUCv9djgMU0KLVU32EPNOveDoO93XXOKVO8GwRwLqQDNUBWKjyiCXkOHP9v0mQQ="
+  },
+  {
+   "id": "gen-108",
+   "tags": "cell,rod,condensator,exchanger,vent,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglDUPAUqnL5vd+bpjWo2MJwwA2jJZb+de/cy/zHwFxGg8/njCVW+HPDWVQOxMqcBA=="
+  },
+  {
+   "id": "gen-109",
+   "tags": "rod,cell,reflector,condensator,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=A7DP3ASuVTzPfPET7F17Xu+l7I+WkNtKzPybzdweZCucREDeDJaoBpSutDmSbBtQMtnIGhWH0AQ="
+  },
+  {
+   "id": "gen-110",
+   "tags": "rod,reflector,cell,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKGodCHOMpocwYmcQN4/7ARWkjHkyCLtE6jYqfpLbn2YJZWX1jsKDmqJmv9cfCCAQ="
+  },
+  {
+   "id": "gen-111",
+   "tags": "vent,rod,plating,cell,reflector,fluid,rci,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IgrmigLeGzWuun0R3tyW6wxf+5CCqQ/g6rrcXgAe85ivMF0OqBaouABKHOuU1EtwBA=="
+  },
+  {
+   "id": "gen-112",
+   "tags": "cell,rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBKSNJ1/+1hwvxfxxBDmCM24tLxxs5FctuMvtRBo09DT95KSvpypr164reASGiAE"
+  },
+  {
+   "id": "gen-113",
+   "tags": "cell,rod,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBKGodCEUNr3U4/5CKVb07muejwqjPFdbsxsqMtAWyaqvt4I17jREFouLXa/qngE"
+  },
+  {
+   "id": "gen-114",
+   "tags": "cell,rod,plating,exchanger,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AzN+ZZSnQQJdNMlLkYCuxXTcHc2XtnpR/DfwY7lDCaDKwH1Q7marDrU9IJkDq8TApdI8VvCR9IYOx55lXtKwBA=="
+  },
+  {
+   "id": "gen-115",
+   "tags": "rod,pulsed,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=URb7uh+M/OWKf+YRdntCV+HM7AyM8HMDtfujwnMVfOONnQVNsRqWhALFAXv1fVHOnE0t3A3FPEsE"
+  },
+  {
+   "id": "gen-116",
+   "tags": "condensator,rod,cell,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AdhY0ItdyWsXztzNAD6aldu3UoVjaREuJkyyZWhjdPe7Glrg3isNnCKg4cCSPCJGYIc9IWve5AQ="
+  },
+  {
+   "id": "gen-117",
+   "tags": "reflector,condensator,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IRQ2vMAFK2hpA3UOahOoHVium64B2CVy/knByOqhWrBbOMY2RHHolgoQE"
+  },
+  {
+   "id": "gen-118",
+   "tags": "cell,condensator,plating,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIKWiP1FmPjgRluvxmKzqRNygalHCloar6CTxJyAwHJdFPbHwyTu5hsgRDjN20QE"
+  },
+  {
+   "id": "gen-119",
+   "tags": "cell,rod,condensator,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ChpStDIItsBBpjBakJQh3wLcFm5ajS6Jp2lVujxz4/HAlOUj60PENtSQE07GDIDfdKZ9Bo7GAjD74dszsoRb8MFLRUiW6XviSsFmBA=="
+  },
+  {
+   "id": "gen-120",
+   "tags": "cell,rod,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJTS43r8PKnpgV7FLo/qdO+mqjCqSLVWHUENGK9IY7JnkeCN3CVm8l0H2rsT1hkBA=="
+  },
+  {
+   "id": "gen-121",
+   "tags": "cell,rod,reflector,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IV71qtjC+9u7HLzYdZ70dPS+WeLJr9Bm0BGR7AYRmTQ2nSndOrjf8vmlwBA=="
+  },
+  {
+   "id": "gen-122",
+   "tags": "exchanger,rod,cell,plating,condensator,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=LGtWu9+x+CWehKSjJmFkDc3yrIgpPI9TWN2QHqxM5PNZVxHx6jSw8t7wF4ksDrixEnwcixnGZmI+FzGYHPjxwjD9Rm15nbAE"
+  },
+  {
+   "id": "gen-123",
+   "tags": "cell,exchanger,rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKGodEo59DhfGVUN+cVr3YRdxsSDMKgD4PDDC8hi9Fv+p/3ybjaeejBdxah74gBA=="
+  },
+  {
+   "id": "gen-124",
+   "tags": "rod,cell,exchanger,condensator,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglE6LxzDTqRm3poBYizrYRBy40yN5OXvTWsSU0uHaJKgNkAWcU17iFSulIXA0vQBA=="
+  },
+  {
+   "id": "gen-125",
+   "tags": "plating,cell,rod,reflector,exchanger,condensator,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=MzZDaNaUWCOwNNm7BPKkwYzfHDBQGbM0I3dAIomikmltMk8WtiXeauimcGvWcqZNUg4rGipsPp98276CGAyIBA=="
+  },
+  {
+   "id": "gen-126",
+   "tags": "rod,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=URbWP/Wv9EgFyZs9eXOt0suHssGuxFye2htWzM3mXkNX7YONGN32+5af8rMGmsIwC9C9QEBEe7UE"
+  },
+  {
+   "id": "gen-127",
+   "tags": "vent,exchanger,plating,cell,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=G36EjVrIj8i+95BzsEM+FPWlDP9dfkq/hrtkpF0LWO7fYktOxNaqPWkc+t+twHwLVhQHnlM/gMMnvJwE"
+  },
+  {
+   "id": "gen-128",
+   "tags": "rod,cell,vent,reflector,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AKsqc9UcEAvQMbSqc/J22ApEWW7FAm/Fspk6NLysgp5rE+yYWBnA1kgRpFuobOAgd9fDCRVDevpMz14UuxEbR3XKk0b4NRMWZmmnYn7CEbttViY4CgQ="
+  },
+  {
+   "id": "gen-129",
+   "tags": "vent,rod,exchanger,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AqypTrQj1fcXXe0bE/ARUQEPTUBI8nS4KhWRnkG+XNEzMOc2knjBlrayYycvlix3DVWGRrnUeD6LsFQZKgJ44Qne8BBao/FgSm4khg1pCSkW4CzSBA=="
+  },
+  {
+   "id": "gen-130",
+   "tags": "exchanger,cell,rod,vent,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKQI4KdP0IY3hgrMrqHIgzXZlrE+alv3i21zNlBPfVfyIJY4UDrFB+GHb0Vl5ZIAQ="
+  },
+  {
+   "id": "gen-131",
+   "tags": "rod,condensator,vent,cell,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AKItoTxUtMuquwO8HsLwgPvJuBfFTI/vgrgkj8Ohr8BTyFcvlZKG0577254k8f9WnsEbHr+cTPjpiQQ="
+  },
+  {
+   "id": "gen-132",
+   "tags": "cell,rod,plating,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ATFO3+BB6mqTTnSK7uyoG89K9Y5LWKM2AONJkdQojQhAjos08tUGuXz1UxKJkDCKbohlVXYCT2HeiojvciDDEB5uBA=="
+  },
+  {
+   "id": "gen-133",
+   "tags": "rod,vent,plating,cell,fluid,automated,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=KsyivSirDGc5LDThB/Sw+D52y14IGbgU0GwYmEemxWQAheXFO3VV/zdVy8AM0M/Rmhtw3104wQbaLxFAPXdl97/pw4fUCDuxZZ/Bwm6UptN7wwt2BA=="
+  },
+  {
+   "id": "gen-134",
+   "tags": "cell,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBKMLtcxjouI9J6ZXEfGT0N6DIePEjqX/lQh7SkJt1nTpl8JuKDRN3HdDGOj/7QE"
+  },
+  {
+   "id": "gen-135",
+   "tags": "cell,vent,exchanger,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCUdnMkqL88hVUuC6kVtSTYk2Pl8pkzVacEG/CAoaUgS7bMCAA8SKA5NFGX4X/0BA=="
+  },
+  {
+   "id": "gen-136",
+   "tags": "cell,rod,plating,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEpFn/z1UdXlP2vR6mXJWei6Gz921uCjlexa8Q/BsYZVQn3yELYEMO5Y7VCBkzMNAQ="
+  },
+  {
+   "id": "gen-137",
+   "tags": "cell,exchanger,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBKUS/QiXrXBZBJUUm5OKRBTJj1dMBsQIwKPI47kUkfjpMpTHI0lrc+2MbBZkFQE"
+  },
+  {
+   "id": "gen-138",
+   "tags": "cell,rod,plating,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=Afs99zQSFIFgdZK5KfWgzuz6QqonWjyN7qjyxyzrWoawUEdzimRcQmzb68PyV5wfNidpeAQ="
+  },
+  {
+   "id": "gen-139",
+   "tags": "exchanger,cell,rod,reflector,plating,condensator,fluid,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEFcsbKneCB+STQgooBRy+YFOAFaz5H4mZJ5PNN/EcHDNSx6+Pw3ubZJ3Dq96ztEvAQ="
+  },
+  {
+   "id": "gen-140",
+   "tags": "rod,cell,exchanger,plating,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AURbwVpOwi+ydDmTmlH0q1iL99cFoD5nQDsYFtxfn1TGgM49jYMc3P5x/ux6OEEKTymngpdlMnVw1QQ="
+  },
+  {
+   "id": "gen-141",
+   "tags": "rod,cell,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBTHUE8j75F1IBi7ACTgg2fX8kXmfvteZbLR5VOYJ4qW9BHph137KzfpL+22higE"
+  },
+  {
+   "id": "gen-142",
+   "tags": "cell,rod,fluid,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=URf7FCLeCALsv0AjBoGxUX6TLjvDQ+1prCcL7T9NbeyVXcvKxVhFnu0jcTDEB+7ceagxzq8iRRAVBA=="
+  },
+  {
+   "id": "gen-143",
+   "tags": "rod,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EgU5asHSi8PcSHVIFzdKAXiH0sqoBTR3MABemAtAtyId1zUukn4GbC/O/g3vMPSkGFR4Xy4ksmIE"
+  },
+  {
+   "id": "gen-144",
+   "tags": "cell,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IRQ2vMAFK06rN8yYawdCcPwObouwEZRlKvnv36OYu/GYcvjdXNj7HrJgE"
+  },
+  {
+   "id": "gen-145",
+   "tags": "cell,rod,exchanger,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIglDUPbcYra4YqhvMAdcJqO+MyELwwPMJyxy7xpogtTkDWXKRTXdHQGHkQ1iiwYQAQ="
+  },
+  {
+   "id": "gen-146",
+   "tags": "rod,cell,condensator,vent,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=A7DAvo1eG/AsJJ6E5f80jpPlscsqQC7g3tJ3VGoSzfASIAiEwx6WnMvtJBtjy1eJ0HAx6Y3SUCwE"
+  },
+  {
+   "id": "gen-147",
+   "tags": "rod,vent,cell,plating,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AoaUZ9w4cxyGcLBqf/1GS5bx3cAC2Wc1hNoX/M8VP0VhNffnAHNuz3EZdABg6sFxQv9ZEmMspy9nnudboNcEHPPP+cnw+KAO/qJSBA=="
+  },
+  {
+   "id": "gen-148",
+   "tags": "rod,cell,plating,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EQShqHRWHQjTs06EFY6eZ4PMFzyUCohhsxbvsEMntGF8+6HCMktR4WqXZYgQAvooBA=="
+  },
+  {
+   "id": "gen-149",
+   "tags": "vent,rod,cell,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EQTpcNZCBaR7G3i8wFT1kf82S8NUh+m8iDnd+1I5k+xnX04qbJRO/+jWXCiyNOgE"
+  },
+  {
+   "id": "gen-150",
+   "tags": "rod,reflector,exchanger,cell,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBS0SCWf1yQECMvVLaErRZtAoC2+B7LL1DAGMhuGNzRHvjx0sfjMoXMzyhIGwPcBA=="
+  },
+  {
+   "id": "gen-151",
+   "tags": "vent,cell,reflector,rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglDUOhCKG16WAEEpAyqIpDOAU3Lq5Hm5V/P0UKiBcYWTidp/pUmSWDXTjnJXcQE"
+  },
+  {
+   "id": "gen-152",
+   "tags": "rod,vent,cell,exchanger,plating,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=PQFYSwG9onV8etoztapog//lDP/+OVeXzx3cn9uq5Jwdp+tTAz2EmUkzTKDToXf4l7j/g3RinhMAvjeZyem8Hx8iPKKhwsYuwQQ="
+  },
+  {
+   "id": "gen-153",
+   "tags": "rod,exchanger,cell,reflector,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=FEW3mr5NAGyuyrLlNmOYlzsqo5WhI3y/oKdPZepAgwW7CvRG6NTC5sCgLIMtNXnN4bcjWOdb5z8RBA=="
+  },
+  {
+   "id": "gen-154",
+   "tags": "vent,rod,reflector,cell,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AJApy1YOlF4e4kPLsCrHzIiKJJQvq68nntwcBC3UtNYCQj+L5dxhURDUn7D1XMH4nx9F0BBl7MraBA=="
+  },
+  {
+   "id": "gen-155",
+   "tags": "rod,vent,cell,fluid,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=G371Kx+a6QIy+jZMMWrT7wok8cpEE+Ey8z/uegdahwAL+Eq04NQYlsV7EZtR7seSP6yu+7+GYA+pNIwE"
+  },
+  {
+   "id": "gen-156",
+   "tags": "rod,exchanger,reflector,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglDUOiv4mbDSL2wZNEmO20/Nr1jLFLo+qfTJh0UKrbJNHqR/pQoqh3qLrWXAkPkBA=="
+  },
+  {
+   "id": "gen-157",
+   "tags": "exchanger,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=URZ8oIaV+Xmp2nPEceQa0os2qASWsAW5RLYtZsaHC0WW6jTCcKztRhw/Pktgedijya3ojcL45UEE"
+  },
+  {
+   "id": "gen-158",
+   "tags": "rod,vent,cell,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglDUOhCdWLvig8T8ANmIYit/uEvzQlXE+EEMbrCVCxiLWNZq8sS8DQqeWbu8PQcBA=="
+  },
+  {
+   "id": "gen-159",
+   "tags": "exchanger,rod,cell,plating,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=KGlGfcOHMchmrI7EIrOiaDOaDfqGRkqzcpzp+JbHFMwffWm/6cO97hRXzL1xR9GSc6iNuD9iGqyuX/ReBt0tWMAGu0zGVcLn7gh+BA=="
+  },
+  {
+   "id": "gen-160",
+   "tags": "rod,cell,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=B+y28ZVaEbKpCzJc8h+JKUO+yH1AJxl4FehaTcdS6nFifqCYMGJkv5dTkm765+W9AsnsBA=="
+  },
+  {
+   "id": "gen-161",
+   "tags": "rod,cell,vent,exchanger,plating,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ATFO3+BA4/Kcnf8kiRoJMNKN3dJiLu5JKDrlJ3PGT6MAw1FixTbO5FEGe6Jjw9q3wKSCYPnUdIlPVowQWNrqLVHT3gQ="
+  },
+  {
+   "id": "gen-162",
+   "tags": "rod,condensator,cell,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJQ1DoQihtelBtIikluoTp9yZMBz1tP7k5WUbropsrM0S0gAgzF5I+RvGHT7ISwBA=="
+  },
+  {
+   "id": "gen-163",
+   "tags": "rod,cell,plating,pulsed,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=AgwIcO8A+MzpGTx15xTkgMQkEMs7eOBCJMQOQVuI7Ass0iu9JZ1RhHeQDgGhS9GzD1unu8iFVPOGpiVKKohsUqdtgX2FBA=="
+  },
+  {
+   "id": "gen-164",
+   "tags": "exchanger,rod,cell,condensator,automated,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglJY8SX/zjciY0LMejDkJzdLikEBxUgQaQyBbqJkXJ+QjG5q08yUK2JRNkCnS4E"
+  },
+  {
+   "id": "gen-165",
+   "tags": "rod,exchanger,cell,plating,vent,fluid,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=CIJzrpurEYofUy8g+orZkr4ekViaJD5Nk57gW5dWWpBbIRR8eDJ3GpLHPHZnktMoBA=="
+  },
+  {
+   "id": "gen-166",
+   "tags": "reflector,rod,plating,cell,exchanger,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=GZuKStSzItS6d4uAQvJ0/Tx7Y4bys5R+yEAszMGV8Uy0BSvWskVme82L21wO7lVhb2bAAny1rmI/sdrCL/FEBA=="
+  },
+  {
+   "id": "gen-167",
+   "tags": "cell,rod,exchanger,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=IglDUOhCKG2n9TFtEyIjdCOra4qZwHKWqP0bFSlDKDx2iZCWhtMKyH7TulM2u5wE"
+  },
+  {
+   "id": "gen-168",
+   "tags": "rod,cell,pulsed,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=MvlK5gnlGFO7nGkcspFR1nqvSyKJ1yBNSCJwXWdM60jH7PKSSjNl3YEiRWpoaLPkch0Jkga9ah1iMd0MA4+5NNL1Xojwgewej8p6Smrrk83xbcie6faARUlYpMmYYwQ="
+  },
+  {
+   "id": "gen-169",
+   "tags": "rod,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IRQ2vMAFLn+tmRscBbpefNjBmm05rAKkjxVHD7AfUR//DvlpzUTbvNjwE"
+  },
+  {
+   "id": "gen-170",
+   "tags": "cell,reflector,rod,vent,condensator,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BxoJ7YN5kUyPZQTThFsr0seJVFaXdygraUSnwMyd/iP0fH09DtSJ9fO8jkVQmZJ2YSW6eNGjc8UMNRpMgiluGzeHZD/yaq6Acitima0E"
+  },
+  {
+   "id": "gen-171",
+   "tags": "rod,exchanger,vent,cell,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCloj9RZj6SLoDkLvXgAxs33Hot9kMYAroJqMq3+g3ABYXlzBGpB9iaE+Gva79oBA=="
+  },
+  {
+   "id": "gen-172",
+   "tags": "rod,reflector,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBKGodCEUNt3jp/zJHRI4lF0mAOpV5s8eJA9V1sMtCpxuwaWgw61EQRzuo++2d/4BA=="
+  },
+  {
+   "id": "gen-173",
+   "tags": "rod,exchanger,cell,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCUNQ6EIobXmiKF08Qc73rVAl0fRh9GUMFzNN6TiocoYzew0UzlrQUz3+Hfv1lUBA=="
+  },
+  {
+   "id": "gen-174",
+   "tags": "rod,exchanger,cell,plating,vent,fluid,automated,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CrMo7RQ24E706wmoAw3iDNEMJcKYcwdhxynGan0nCOIY0OYh7HrtrNksE29UDWWdt6lAxkEcQDeTevLG01YUh1mqdHNM3DGgJCdfdCwM9Pp1Yuk4xgQ="
+  },
+  {
+   "id": "gen-175",
+   "tags": "rod,plating,cell",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BEEoah0IRQ2vMAFK0+SyHw2TgQSXALmBOcgzXkjw16V0zw4xXFvYHDsieNN80GNkBA=="
+  },
+  {
+   "id": "gen-176",
+   "tags": "rod,cell,reflector,vent,pulsed,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ByTt+5c/wIh84CVGVLZ6bywR0EHJQKVjKxR8zZ/0M/2xTqweol2iIed81DX7Yvft28iVF3Vm9j3ZIguVpkdo6D0kOLVNRlmw1FSB+ZVMWxG3pdvDxJNTpQW7Ht6Hn58MmH9fn50RxWekbFPuaW36PmsE"
+  },
+  {
+   "id": "gen-177",
+   "tags": "vent,rod,cell,fluid,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=FDT2Agp3z4Av8x9Kp+HXa6mw9mwF66ReS+Q+UJtk5szOxeikI5Ze+tw8SCgW5RIm7L+MfP5fzpGRJwuAQwNyHPKUr+kwZIgVlouKBA=="
+  },
+  {
+   "id": "gen-178",
+   "tags": "rod,plating,cell,fluid,pulsed,automated,gt509",
+   "gt509": true,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=LXatzB+4YjoG5c3/ySu1BRmyIMBbngN500RovvzvOYyz8h+VjSODWI9e8qyg7nlbuU1rQDGwCIh32tUsbdIdmHT7sq+U/guYJsjzBA=="
+  },
+  {
+   "id": "gen-179",
+   "tags": "condensator,rod,reflector,exchanger,fluid,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=BRGABECrApcCk3ECzRP3VPEjw1B6+z2tw7tz+XilUIwn4SG/GT71YV1TGapfDGozggIDwUstQan9QQQ="
+  },
+  {
+   "id": "gen-180",
+   "tags": "rod,plating,condensator,fluid",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIgnOum6tLQjfZw4EgrEohcdJkR7K2KyrVhEOeGGi+s+O++AVQccuwCAaac+Y0vIBA=="
+  },
+  {
+   "id": "gen-181",
+   "tags": "rod,plating,cell,reflector",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=OwsaEWFNKow31M7UCwJRlBfXkq7XwPJ9E5eoIdZwx70z/nEh63oQkdnn0Ri1EGWgVw60o7igrAQ="
+  },
+  {
+   "id": "gen-182",
+   "tags": "cell,fluid,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBXLGvcBAz0JzEG8jsQrFCKN/FKn6tIueO2jenREqye/xaeYV01k0Km3Fu51RgE"
+  },
+  {
+   "id": "gen-183",
+   "tags": "plating,rod,cell,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=B2FjQiwbxDXm+ygiHo/Hx8TW9SFv8yQ6Y/iLNcYia0/IHrAK1+OHpkSDteH04vxblZlY8BMReRAE"
+  },
+  {
+   "id": "gen-184",
+   "tags": "reflector,rod,cell,vent,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=RBKYRRi9LxxflhXpM5xdtvotzsmKiF7HppIo/HmxgznTKSKdttX1nu1brpnMsIRsBA=="
+  },
+  {
+   "id": "gen-185",
+   "tags": "rod,plating,cell,fluid,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CiL4L0sIYfzqbHDjkaRXz8xZS0kJyrc2QuxNiQw+BEUpoDuM6WfYrdnfAXNeGGC+1pTId9Vkp5WJBA=="
+  },
+  {
+   "id": "gen-186",
+   "tags": "exchanger,rod,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=JcKo7jIUbmMvXJi8Taxf74AlzqlCFmhb93fdbApy0p5JG9ppGQua43AG+BzkZ4Z/NBfgQo8AelFnPHodBA=="
+  },
+  {
+   "id": "gen-187",
+   "tags": "rod,exchanger,reflector,condensator,cell,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJQ1ENzjIk3jqNDXK9nrOUvtn54HsM/nlzUHimMCB+XDibAFIO/lPFoeHKPKuOQBA=="
+  },
+  {
+   "id": "gen-188",
+   "tags": "rod,plating,fluid,gtnh",
+   "gt509": false,
+   "gtnh": true,
+   "tickCap": 4000,
+   "code": "erp=AiCc66bqxGKH1MvIPWBPw+0PuzukWI65CuuSDIydmU8t0eciWbMOzhJr4ZKsULQE"
+  },
+  {
+   "id": "gen-189",
+   "tags": "cell,condensator,exchanger,rod,vent,plating",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AIglJbeFAlpPMLMUAkT7AiEJ1WrlfWxUSv8wls05DT2MK0SBU3fwzXkFVPPLlDncwAQ="
+  },
+  {
+   "id": "gen-190",
+   "tags": "rod,cell,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIKWiP1T4uvyevg96u4ZdTBDQ+zJji18ZStAuV8Yr1lBG8URUrP+7hBcSSPJzBAE"
+  },
+  {
+   "id": "gen-191",
+   "tags": "exchanger,rod,cell,reflector,vent",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AiCUNQ6EIocI4zDRVnK/3SI2BdJdTRmOowH3Q37xtKG+ro787MLIi84KjXvqa9DABA=="
+  },
+  {
+   "id": "gen-192",
+   "tags": "rod,cell,vent,plating,reflector,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=AoaUbQv1c7NiE7YJEHaW3tIS3scW/GB8/ORGXjog0zYD3NIVe9Ul2SuS8NvtNNkrupM890p5Y80+JMQU4iIfIKvb7frB1tZ8FAaawgQ="
+  },
+  {
+   "id": "gen-193",
+   "tags": "rod,plating,condensator,fluid,rci",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EQVyxr3AQM9CcxBvI7JVGdHx1mhl5qP8HFDv1sT5rlt6+HBvy1a2XrYBlWKw6ZQE"
+  },
+  {
+   "id": "gen-194",
+   "tags": "rod",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=ARBKQjIIcYaFWq5iFH1+B6I0ETh2FnYhyBd27CBr8qRwqdZqFBxIZMd+6ds5e0QE"
+  },
+  {
+   "id": "gen-195",
+   "tags": "rod,cell,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CIJQ1DoQihteYAKVp1Wb5kw1g6CvlKszWfaSEkL+WKJ+7yVm4TRtaI+a80sEZsoE"
+  },
+  {
+   "id": "gen-196",
+   "tags": "cell,rod,exchanger",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=EQSjKAmWtQgU37WSTCOmkcG2XtHVHzYxbzJYVxkqDCwYHk41OEY3IRz6BOo5QQAE"
+  },
+  {
+   "id": "gen-197",
+   "tags": "rod,condensator,cell,plating,vent,fluid,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=CrLRDE5t0PAc0AywadLS3I9FZQYnXbV8hBPfxmsi1mTmRXuGEEX39rvOGC7aH+5JpXGl67midQThb7z90mtR47UE91KGnMs6c0LCLFxyx0qsgIaS4gQ="
+  },
+  {
+   "id": "gen-198",
+   "tags": "rod,condensator,automated",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=TFO3+BA4/KUU3wOQwlX9xx6VoiRPcTWTAyECMXumIUPvQYbQcxz2lYhy+mMPTCu872vAU+ox288cLYTc1LSMt1oE"
+  },
+  {
+   "id": "gen-199",
+   "tags": "rod,pulsed",
+   "gt509": false,
+   "gtnh": false,
+   "tickCap": 4000,
+   "code": "erp=Aoi1hrIikPnkG3/0tilznl+H3HvGU2JHH32FbTz0CdCXjvaUYoJM3+YHXKrkX8l4D5TvrUI5xrKBBA=="
+  }
+ ]
+}

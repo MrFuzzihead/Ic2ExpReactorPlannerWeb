@@ -1,0 +1,30 @@
+import './page-shim.js';
+import '../ui/app.js';
+import { describeBoard } from '../ui/board.js';
+import { parseCatalog, getComponentCount } from '../engine/components.js';
+import { readFile } from 'node:fs/promises';
+
+const catalog = parseCatalog(await readFile('web/data/components.json', 'utf8'));
+const click = globalThis.PAGE.click;
+const boardElement = globalThis.PAGE.registry.get('board');
+const textarea = globalThis.PAGE.registry.get('code');
+const drawer = globalThis.PAGE.registry.get('palette');
+const modesElement = globalThis.PAGE.registry.get('modes');
+
+const start = textarea.value;
+const entry = drawer.children[1].children[0];
+click(entry);
+const emptySlot = boardElement.kids.find((slot) => slot.attributes.has('data-empty'));
+const index = Number(emptySlot.attributes.get('data-index'));
+click(emptySlot);
+const mid = textarea.value;
+console.log('index:', index, 'empty before:', boardElement.kids.filter((s) => s.attributes.has('data-empty')).length);
+console.log('start:', start);
+console.log('mid  :', mid);
+const placed = describeBoard(mid, catalog);
+console.log('placed cell at index:', JSON.stringify(placed.cells.find((c) => c.index === index)));
+click(modesElement.querySelector('[data-mode="Clear"]'));
+const touched = boardElement.kids.find((s) => Number(s.attributes.get('data-index')) === index);
+click(touched);
+console.log('end  :', textarea.value);
+console.log('same :', textarea.value === start);

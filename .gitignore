@@ -31,3 +31,19 @@ src/main/resources/mixins.*.json
 *.DS_Store
 !gradlew.bat
 erpprefs.xml
+# The IDE preview server's mirrored log (tools/serve.mjs --log); see webPreview in build.gradle.
+/web-preview.log
+
+# Probe artifacts. `tools/probe-*.mjs` are the source: they generate a `web/ui/probe-*.html` over
+# `web/ui/index.html`, and a headless-browser run of that page leaves a screenshot, a DOM dump and
+# a console capture behind. Running the tool rebuilds all of it, so none of it is tracked.
+/web/ui/probe-*.html
+/probe-*.png
+/probe-*.txt
+/web-preview-*.png
+/serve.log
+/serve.out
+/err.txt
+/out.txt
+/tmp-dom.html
+/img.png

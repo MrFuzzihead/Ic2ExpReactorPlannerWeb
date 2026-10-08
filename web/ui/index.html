@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IC2 Extended Reactor Planner</title>
+<!-- The tab icon is a real component sprite rather than a new asset, and it has to name the path
+     explicitly: a browser that gets a 404 here also prints that 404 in the dev console. -->
+<link rel="icon" href="../assets/icons/reactorCoolantSimple.png">
+
+<!--
+  The manifest is what makes the page installable on a phone; see `manifest.webmanifest` for why
+  every value in it is one the repo already owns. `theme-color` is the same `--bg` the stylesheet
+  paints, so the browser chrome over the page is the page's own colour rather than a white band.
+-->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#17181b">
+
+<!--
+  Stage 4's page: paste a reactor code, see the board.
+
+  The page is one file and one stylesheet block on purpose. The board's contents come from
+  `board.js` (DOM-free, tested headlessly in `web/test/board.test.js`); this file decides only
+  layout. Cell size is set by `app.js` as the `--cell` custom property on the board element, so
+  the stylesheet never needs to know the design's dimensions.
+
+  Serve the repo root so the module paths in `app.js` resolve: `node tools/serve.mjs --open` opens
+  this page in the default browser, and prints every 404 and every uncaught page error in the console.
+-->
+
+<style>
+  :root {
+    --ink: #e8e6e1;
+    --ink-dim: #9a978f;
+    --bg: #17181b;
+    --panel: #22242a;
+    --line: #33363e;
+    --accent: #6fb8c9;
+    --danger: #d8705f;
+    --good: #79bd88;
+    --warn: #d8a24f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    padding: 14px;
+  }
+
+  h1 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0 0 2px;
+  }
+
+  #design {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    color: var(--ink-dim);
+    font-size: 13px;
+  }
+
+  #design [data-flag] {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 7px;
+  }
+
+  #design [data-flag]::before { content: attr(data-flag); }
+
+  #design [data-heat] { color: var(--accent); }
+
+  #board {
+    --cell: 48px;
+    --cols: 9;
+    display: grid;
+    grid-template-columns: repeat(var(--cols), var(--cell));
+    gap: 3px;
+    width: fit-content;
+    margin: 0 auto;
+    padding: 5px;
+    background: var(--panel);
+    border-radius: 6px;
+    touch-action: none;
+  }
+
+  #board > div {
+    width: var(--cell);
+    height: var(--cell);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  #board > div[data-empty] {
+    background: var(--line);
+    border-radius: 3px;
+  }
+
+  /* A column past the installed Reactor Chambers: the frame is always the whole 6 x 9, and what
+     the game has not opened up is drawn rather than hidden, so a visitor can see the room to grow.
+     The cross is two hairlines corner to corner, drawn with gradients so the rule costs no extra
+     elements and no pseudo-element. */
+  #board > div[data-locked] {
+    background: var(--bg);
+    background-image:
+      linear-gradient(to top right, transparent calc(50% - 1px), var(--ink-dim) calc(50% - 1px), var(--ink-dim) calc(50% + 1px), transparent calc(50% + 1px)),
+      linear-gradient(to bottom right, transparent calc(50% - 1px), var(--ink-dim) calc(50% - 1px), var(--ink-dim) calc(50% + 1px), transparent calc(50% + 1px));
+    border-radius: 3px;
+  }
+
+  #board > div img {
+    width: var(--cell);
+    height: var(--cell);
+    image-rendering: pixelated;
+  }
+
+  /* The chamber gate sits under the frame it gates. It is always shown rather than opened on
+     demand: a visitor who has never thought about chambers still needs to see which columns are
+     closed. The input is the desktop's spinner idiom, the same one the automation panel uses. */
+  #chambers {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 6px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  #chambers [data-field] {
+    display: block;
+    font: 12px/1.3 system-ui, sans-serif;
+    color: var(--ink-dim);
+    margin: 0 0 2px;
+  }
+
+  #chambers input[data-field] {
+    display: block;
+    width: 56px;
+    font: 14px/1.3 system-ui, sans-serif;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 3px 8px;
+  }
+
+  /* The temperature-effects readout sits under the frame it describes, always shown: unlike the
+     panels a visitor opens, it is one line of numbers a visitor needs before they decide anything.
+     `pre-wrap` is what keeps the bundle's double spaces between the five gates. */
+  #temperature {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 6px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  #temperature [data-effects] {
+    font: 12px/1.4 system-ui, sans-serif;
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+
+  /* The two run colours, spelled out. The desktop says the same thing as a Swing tooltip on the
+     button (`ComponentTooltip.Broken`, `ComponentTooltip.ResidualHeat`), which a phone cannot hover
+     and a screenshot cannot show, so the page puts the bundle's words under the board they describe.
+     The strip stays closed until a run marks something, which is why it has no margin of its own
+     until it is open. */
+  #runlegend {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 6px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  #runlegend [data-key] {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font: 12px/1.4 system-ui, sans-serif;
+    color: var(--ink);
+  }
+
+  #runlegend [data-key] > i {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+  }
+
+  #runlegend [data-key="melt"] > i {
+    background: #ff0000;
+  }
+
+  #runlegend [data-key="residual"] > i {
+    background: #ffa500;
+  }
+
+  #modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 10px;
+  }
+
+  #modes [data-mode] {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 4px 9px;
+    font: inherit;
+    touch-action: manipulation;
+  }
+
+  #modes [data-mode][data-active] {
+    color: var(--ink);
+    border-color: var(--accent);
+  }
+
+  /* The cell a tap just changed, so a Clear that removed a rod is visible as the gap it left rather
+     than as a board that quietly redrew itself. */
+  #board > div[data-touched] {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  /* What the last run left on the cell. The desktop's `process` (`AutomationSimulator:988-996`) sets
+     the button's background to the colour the run published — `0xFF0000` for a component that broke
+     (`:686`), `0xFFA500` for one that still held heat at the end (`:367`) — with the icon painted on
+     top, so these are the desktop's own hex values rather than a palette choice. The icons carry
+     alpha, which is what lets the colour read around the sprite. */
+  #board > div[data-melt] {
+    background: #ff0000;
+    border-radius: 3px;
+  }
+
+  #board > div[data-residual] {
+    background: #ffa500;
+    border-radius: 3px;
+  }
+
+  /* The `Inspect` readout. `WEB_DESIGN.md` §6 settled that the popover *is* the board cell, so the
+     text hangs from the tapped slot rather than replacing it: the icon stays visible, the popover
+     starts below the cell, and `pointer-events: none` keeps the board tappable underneath it. The
+     text is the desktop's whole string, newlines included, which is why it is `pre-wrap`. A rod an
+     automated reactor replaces every 84 seconds carries fifty of those lines, so the popover is
+     scrollable rather than clipped. */
+  #board > div > div[data-inspect] {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--cell) + 6px);
+    transform: translateX(-50%);
+    width: min(46vw, 320px);
+    max-height: 45vh;
+    overflow: auto;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 5px;
+    padding: 5px 7px;
+    color: var(--ink);
+    font: 11px/1.35 system-ui, sans-serif;
+    white-space: pre-wrap;
+    word-break: break-all;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* The `Automate` panel: the desktop's automation tab, which the per-cell `a` button opens for
+     whichever cell was tapped. Like the drawer it collapses to nothing until the chip is lit, so a
+     visitor who never taps `Automate` sees the same page as before. The two fields are the
+     desktop's spinners, so they are number inputs whose bounds the page sets from the code's own
+     constants rather than authoring a second copy of them here. */
+  #automation {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: none;
+  }
+
+  #automation:not([hidden]) {
+    display: block;
+  }
+
+  #automation [data-chosen] {
+    color: var(--ink-dim);
+    font: 12px/1.35 system-ui, sans-serif;
+    margin: 0 0 6px;
+  }
+
+  #automation [data-field] {
+    display: block;
+    font: 12px/1.3 system-ui, sans-serif;
+    color: var(--ink-dim);
+    margin: 0 0 2px;
+  }
+
+  #automation input[data-field] {
+    display: block;
+    width: 120px;
+    font: 14px/1.3 system-ui, sans-serif;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 3px 8px;
+    margin: 0 0 6px;
+  }
+
+  #automation [data-help] {
+    font: 11px/1.35 system-ui, sans-serif;
+    color: var(--ink-dim);
+    margin: 0 0 6px;
+  }
+
+  #automation [data-toggle] {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font: 13px/1.3 system-ui, sans-serif;
+    touch-action: manipulation;
+  }
+
+  #automation [data-toggle][data-off] {
+    opacity: 0.45;
+    text-decoration: line-through;
+  }
+
+  /* The palette is a drawer the Place chip opens, under the board: the board already owns 62% of
+     the viewport height in the cell-size math, so a permanent strip would compete with legibility.
+     It collapses to nothing when closed, which is why the page is unchanged for a visitor who never
+     opens it. */
+  #palette {
+    width: fit-content;
+    margin: 10px auto 0;
+    padding: 8px;
+    background: var(--panel);
+    border-radius: 6px;
+    display: none;
+  }
+
+  #palette:not([hidden]) {
+    display: block;
+  }
+
+  #palette [data-filters] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 0 0 8px;
+  }
+
+  #palette [data-axis] {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font: 13px/1.3 system-ui, sans-serif;
+    touch-action: manipulation;
+  }
+
+  #palette [data-axis][data-off] {
+    opacity: 0.45;
+    text-decoration: line-through;
+  }
+
+  /* The entry column is 88px rather than 56px because a flex item cannot shrink below its longest
+     word, and the catalog's longest words ("Overclocked", "Condensator") are wider than 56px at 11px
+     type — which is what printed one entry's name across the next entry's icon. `overflow: hidden`
+     is the belt for the rest. */
+  #palette [data-entries] {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    gap: 4px 8px;
+  }
+
+  #palette [data-id] {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--ink-dim);
+    font-size: 11px;
+    overflow: hidden;
+  }
+
+  #palette [data-id] img {
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+  }
+
+  /* The entry a visitor selected, and the line the desktop shows above the palette. Both are the
+     bundle's words, so the wording is whatever the localized bundle says. */
+  #palette [data-id][data-selected] {
+    color: var(--ink);
+    outline: 1px solid var(--accent);
+  }
+
+  #palette [data-placing] {
+    color: var(--ink-dim);
+    font-size: 12px;
+    margin: 6px 0 0;
+  }
+
+  /* The desktop's `UI.CopyCodeButton`, which sits next to the code field for the same reason the
+     field does: it acts on the code, not on the board. It is not a mode chip, so it never lights. */
+  #copy,
+  #cleargrid,
+  #simulate {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 4px 9px;
+    font: inherit;
+    touch-action: manipulation;
+  }
+
+  /* The reactor code is ~100 characters of 12 px monospace, about 720 px of text. A box that spans
+     the viewport put a thousand pixels of empty field between the end of the string and the `Copy
+     Code` button under its left edge, which is the one action this app exists for; the box stops at
+     the text's own measure and keeps the left edge the controls share. */
+  #code {
+    width: min(100%, 900px);
+    min-height: 74px;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 8px;
+    font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    word-break: break-all;
+  }
+
+  #error {
+    color: var(--danger);
+    font-size: 13px;
+    margin: 0 0 10px;
+  }
+
+  /* The desktop's `UI.MaterialsTab`: the shopping list for what is on the board. Like the drawer
+     and the automation panel it collapses to nothing until its chip is lit, so the page a visitor
+     has not opened is still just the board. The list is the desktop's `materialsArea` text -- one
+     `count name` line per material, monospace and `pre-wrap` because the engine's `toString()`
+     carries the newlines -- and the two controls under it are the recipe switches that rebuild the
+     table the list is summed from (`ReactorPlannerFrame.java:2402-2415`). */
+  #materials {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: none;
+  }
+
+  #materials:not([hidden]) {
+    display: block;
+  }
+
+  #materials [data-list] {
+    font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  #materials [data-caption] {
+    color: var(--ink-dim);
+    font: 12px/1.35 system-ui, sans-serif;
+    margin: 0 0 4px;
+  }
+
+  #materials [data-gt], #materials [data-alloy] {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font: 13px/1.3 system-ui, sans-serif;
+    touch-action: manipulation;
+  }
+
+  /* Exactly one GregTech version is lit, the way one mode chip is: the combo it replaces had four
+     items and one selection. */
+  #materials [data-gt][data-active] {
+    color: var(--ink);
+    border-color: var(--accent);
+  }
+
+  #materials [data-alloy][data-off] {
+    opacity: 0.45;
+    text-decoration: line-through;
+  }
+
+  #materials [data-gt-row], #materials [data-alloy-row] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 0 0 6px;
+    align-items: center;
+  }
+
+  /* The desktop's reactor-level configuration: the radio pair, the three checkboxes, the two
+     spinners and the `pulsePanel` (`ReactorPlannerFrame.java:1347-1490`, `:675-786`). Same spinner
+     idiom as the automation panel, same reason for one handler per input. The pulse rows are built
+     only while the pulsed flag is on — `togglePulseConfigTab` (`:2261-2272`) inserts the Swing tab
+     under that label and removes it otherwise — so the panel changes shape rather than showing a
+     dead group. */
+  #config {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: none;
+  }
+
+  #config:not([hidden]) {
+    display: block;
+  }
+
+  #config [data-field] {
+    display: block;
+    font: 12px/1.3 system-ui, sans-serif;
+    color: var(--ink-dim);
+    margin: 0 0 2px;
+  }
+
+  #config input[data-field] {
+    display: block;
+    width: 120px;
+    font: 14px/1.3 system-ui, sans-serif;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 3px 8px;
+    margin: 0 0 6px;
+  }
+
+  #config [data-help] {
+    font: 11px/1.35 system-ui, sans-serif;
+    color: var(--ink-dim);
+    margin: 0 0 6px;
+  }
+
+  #config [data-caption] {
+    color: var(--ink-dim);
+    font: 12px/1.35 system-ui, sans-serif;
+    margin: 0 0 4px;
+  }
+
+  #config [data-max-heat] {
+    color: var(--accent);
+    font: 12px/1.35 system-ui, sans-serif;
+    margin: 0 0 6px;
+  }
+
+  #config [data-style-row], #config [data-flag-row], #config [data-pulse-row] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 0 0 6px;
+    align-items: center;
+  }
+
+  #config [data-style], #config [data-flag], #config [data-reset-pulse], #config [data-legacy] {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font: 13px/1.3 system-ui, sans-serif;
+    touch-action: manipulation;
+  }
+
+  /* Exactly one style is lit, the way one GregTech chip is: the pair it replaces was a radio group
+     with one selection (`reactorStyleGroup.add` at `:1344` and `:1354`). */
+  #config [data-style][data-active] {
+    color: var(--ink);
+    border-color: var(--accent);
+  }
+
+  #config [data-flag][data-off], #config [data-reset-pulse][data-off], #config [data-legacy][data-off] {
+    opacity: 0.45;
+    text-decoration: line-through;
+  }
+
+  /* The desktop's Component List tab (`:1631`), a `JTextArea` in a `JScrollPane` like the shopping
+     list, so the same monospace `pre-wrap` box and the same scroll rule. */
+  #components {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: none;
+  }
+
+  #components:not([hidden]) {
+    display: block;
+  }
+
+  #components [data-caption] {
+    color: var(--ink-dim);
+    font: 12px/1.35 system-ui, sans-serif;
+    margin: 0 0 4px;
+  }
+
+  #components [data-list] {
+    font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* The desktop's `UI.ComparisonTab`: the last run against the run before it. Collapsed until its
+     chip is lit, like the drawer, the automation panel and the shopping list. The lines are the
+     engine's comparison string, one `<br>`-separated row per `data-line`, and the `<font color="…">`
+     runs the bundle emits become `data-color` spans. The desktop asks for the HTML colour names
+     `green`, `red` and `orange`; the page keeps those words as the attribute and paints them with
+     its own palette, because the Swing label sits on white and this page sits on #17181b. */
+  #comparison {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: none;
+  }
+
+  #comparison:not([hidden]) {
+    display: block;
+  }
+
+  #simulation {
+    width: fit-content;
+    max-width: 92vw;
+    margin: 10px auto 0;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: none;
+  }
+
+  #simulation:not([hidden]) {
+    display: block;
+  }
+
+  #simulation [data-caption] {
+    color: var(--ink-dim);
+    font: 12px/1.35 system-ui, sans-serif;
+    margin: 0 0 4px;
+  }
+
+  /* The report is a JTextArea's plain text in the desktop, one line per `\n`, and the figures line
+     up under each other only in a monospace face. */
+  #simulation [data-line] {
+    font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    color: var(--ink);
+    word-break: break-all;
+  }
+
+  #comparison [data-caption], #comparison [data-header] {
+    color: var(--ink-dim);
+    font: 12px/1.35 system-ui, sans-serif;
+    margin: 0 0 4px;
+  }
+
+  #comparison [data-prev-code] {
+    color: var(--ink-dim);
+    font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0 0 6px;
+  }
+
+  #comparison [data-lines] {
+    display: grid;
+    gap: 3px;
+    margin: 4px 0 0;
+  }
+
+  #comparison [data-line] {
+    font: 12px/1.4 system-ui, sans-serif;
+    color: var(--ink);
+    word-break: break-all;
+  }
+
+  #comparison [data-color="green"] {
+    color: var(--good);
+  }
+
+  #comparison [data-color="red"] {
+    color: var(--danger);
+  }
+
+  #comparison [data-color="orange"] {
+    color: var(--warn);
+  }
+
+  /* The copy button wears the checkboxes' look rather than a browser default: it is a control in
+     the same row, and an unstyled `<button>` would arrive white on a dark panel. It has no off
+     state, so only the `[data-off]` rule below stays scoped to the toggles. */
+  #comparison [data-toggle], #comparison [data-copy-comparison] {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font: 13px/1.3 system-ui, sans-serif;
+    touch-action: manipulation;
+  }
+
+  #comparison [data-toggle][data-off] {
+    opacity: 0.45;
+    text-decoration: line-through;
+  }
+
+  /* The three long readouts scroll inside their own box rather than stretching the page, which is
+     what the Swing frame does: `ReactorPlannerFrame.java:1887` puts the comparison in a
+     `JScrollPane` and `:2786` sets its `unitIncrement(16)`; the materials list and the component
+     list sit in `JScrollPane`s of their own (`:636`, `:638`). A 124-line comparison measured 2517 px
+     at a monitor width — four screenfuls of page — so a page that scrolls loses the board and the
+     code between reads. Scoped to a fine pointer: the phone's portrait pass is still open (§20, §25)
+     and a thumb already scrolls the page itself. */
+  @media (pointer: fine) {
+    #palette:not([hidden]), #materials:not([hidden]), #comparison:not([hidden]), #components:not([hidden]) {
+      max-height: 45vh;
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+  }
+
+  /* A finger, not a mouse. The design doc asks for tap targets of at least 40 px, and the pointer
+     type is the browser's own answer to which input is which -- a fine pointer keeps the compact
+     desktop spacing the captures measured, a coarse one gets the same controls with the padding
+     that reaches 40 px. Nothing here changes what the page shows a desktop visitor. */
+  @media (pointer: coarse) {
+    #modes [data-mode], #copy, #cleargrid, #simulate, #palette [data-axis], #automation [data-toggle],
+    #materials [data-gt], #materials [data-alloy], #comparison [data-toggle], #comparison [data-copy-comparison],
+    #config [data-style],
+    #config [data-flag], #config [data-reset-pulse], #config [data-legacy] { padding: 11px 12px; }
+    #automation input[data-field], #config input[data-field] { padding: 10px 12px; }
+    #chambers input[data-field] { padding: 10px 12px; width: 88px; }
+    #palette [data-id] { font-size: 13px; }
+    #palette [data-id] img { width: 28px; height: 28px; }
+  }
+
+  @media (prefers-reduced-motion) { transition: none; }
+</style>
+</head>
+
+<body>
+<h1>IC2 Extended Reactor Planner</h1>
+
+<div id="design"></div>
+
+<div id="board"></div>
+
+<!-- What the last run left on the grid. The desktop's simulator publishes `R%dC%d:0xRRGGBB` chunks
+     (`AutomationSimulator:191` silver, `:367` orange, `:686` red) and its own `process` (`:984-997`)
+     paints them onto the design grid's buttons and sets each button's tooltip; the colours are the
+     run's, not the design's, and they stay until the next run clears every cell to silver. The page
+     marks the same cells, and this strip spells out the two colours in the bundle's own tooltip
+     words — a Swing tooltip has a hover, a browser on a phone does not, and a screenshot has none.
+     `app.js` fills it and keeps it closed until a run marks something. -->
+<div id="runlegend" hidden></div>
+
+<!-- The Reactor Chamber gate. The engine has no chamber concept (`Reactor.java` is a fixed 6 x 9
+     grid and no component is a chamber), so this control and its wording are web-side in the same
+     way the mode chips are: the Nuclear Reactor block brings 3 columns and each chamber opens one
+     more, up to the 9 the code can carry. `app.js` fills and wires it, and it sits under the frame
+     it gates. -->
+<div id="chambers"></div>
+
+<!-- The temperature-effects readout: the desktop's `temperatureEffectsLabel`, which sits beside the
+     max-heat label in the Swing frame and is rewritten after every edit from one expression -- the
+     design's max heat times 0.4, 0.5, 0.7, 0.85 and 1.0, each cast to an `int`. Those are the gates
+     the run itself uses (`automation-simulator.js:224-227`), which is why the line sits under the
+     board it describes rather than in the header. `app.js` fills it; the wording is the bundle's. -->
+<div id="temperature"></div>
+
+<!-- The mode chips: `WEB_DESIGN.md` §6 settled five of them, and only the ones that do something
+     are authored here — nothing ships that a visitor cannot use. `Place` is the default, matching
+     the desktop, and is the only chip lit in the authored page; `app.js` lights a chip when it is
+     clicked and dims the rest. `Automate` is the fifth, and opens the panel below; `Materials`,
+     `Compare` and `Simulation` are readouts that open their own panels on the same pattern. -->
+<div id="modes">
+  <button data-mode="Place" data-active="">Place</button>
+  <button data-mode="Clear">Clear</button>
+  <button data-mode="Pick">Pick</button>
+  <button data-mode="Inspect">Inspect</button>
+  <button data-mode="Automate">Automate</button>
+  <button data-mode="Config">Config</button>
+  <button data-mode="Materials">Materials</button>
+  <button data-mode="Components">Components</button>
+  <button data-mode="Compare">Compare</button>
+  <button data-mode="Simulation">Simulation</button>
+</div>
+
+<!-- The textarea ships with a real design so the page is never blank on first open. `app.js`
+     prefers the remembered code over this sample when there is one; the sample is the fallback.
+     gen-122 is a corpus design: 19 components across six categories, which is the busiest thing
+     a first-time visitor is likely to want to see. -->
+<label for="code" hidden>Paste a reactor code (erp=... or legacy)</label>
+<textarea id="code">erp=LGtWu9+x+CWehKSjJmFkDc3yrIgpPI9TWN2QHqxM5PNZVxHx6jSw8t7wF4ksDrixEnwcixnGZmI+FzGYHPjxwjD9Rm15nbAE</textarea>
+
+<!-- The desktop's Copy Code button (`ReactorPlannerFrame:2151`), whose label is the bundle's own
+     `UI.CopyCodeButton`. It sits under the field it acts on rather than among the mode chips: it
+     changes nothing about the design, it moves the code somewhere else. -->
+<button id="copy" data-copy="">Copy Code</button>
+
+<button id="cleargrid" data-clear-grid="">Clear Grid</button>
+
+<!-- The desktop's Simulate button, which sits beside Clear Grid in the Swing frame's own grouping
+     (`jPanel4` holds `clearGridButton`, `simulateButton` and `cancelButton` at `:1375-1394`). It is
+     the one control on the page that starts a run rather than showing one: `simulateButtonActionPerformed`
+     (`:2085`) moves the finished run into the desktop's history and starts a new one, which is what
+     makes two runs of the same design comparable. The page has no `UI.CancelButton` for the slot
+     beside it -- see WEB_MIGRATION_PLAN.md §34 for why a run that finishes before the click returns
+     has nothing to cancel. -->
+<button id="simulate" data-simulate="">Simulate</button>
+
+<!-- The drawer ships closed and empty: `app.js` fills it from the catalog and clears `hidden`
+     while Place is the active chip. A filter chip is on until it carries `data-off`. It sits below
+     the code rather than above it: an open drawer is 72 entries tall, and putting it ahead of the
+     textarea pushed the page's most-used control off the first screen. -->
+<div id="palette" hidden></div>
+
+<div id="automation" hidden></div>
+
+<!-- The reactor-level configuration ships closed and empty like every other panel: `app.js` fills
+     it from the bundle and the design, and clears `hidden` while `Config` is the lit chip. Nothing
+     is authored here because every word of it is the bundle's — the two style labels, the three
+     checkbox labels, the two spinner labels and their tooltips, the four pulse labels, the two help
+     lines, the unit word, the tab label and the reset button. -->
+<div id="config" hidden></div>
+
+<!-- The shopping list ships closed and empty like the drawer and the automation panel: `app.js` fills
+     it from the engine's `Reactor.getMaterials` and the recipe switches, and clears `hidden` while
+     `Materials` is the lit chip. Nothing is authored here because every word of it is the bundle's.
+     It sits below the code rather than above it, on the same reasoning as the drawer: an open panel
+     is a dozen lines tall, and ahead of the textarea it pushed the page's most-used control off the
+     first screen. -->
+<div id="materials" hidden></div>
+
+<!-- The component list ships closed and empty like every other panel: `app.js` fills it from the
+     engine's `Reactor.getComponentList`, and clears `hidden` while `Components` is the lit chip. -->
+<div id="components" hidden></div>
+
+<!-- The comparison of the last two runs ships closed and empty like the drawer, the automation panel
+     and the shopping list: `app.js` fills it from the two runs the page has made and clears `hidden`
+     while `Compare` is the lit chip. Nothing is authored here because every word of it is the
+     bundle's — the tab label, the header, the previous design's code, and every line of the diff. -->
+<div id="comparison" hidden></div>
+
+<!-- The last run's output ships closed and empty like the other panels: `app.js` fills it from the
+     run's report, the same text the Swing frame's `outputArea` JTextArea receives line by line, and
+     clears `hidden` while `Simulation` is the lit chip. Opening the panel runs a simulation for the
+     code the field holds if the page has not run one yet — the desktop's `simulatedReactor` discipline
+     rather than its Simulate button, since the page has no cancel and no queue, and one run per code
+     is what keeps this panel, the Inspect popovers and the comparison reading the same run. -->
+<div id="simulation" hidden></div>
+
+<div id="error"></div>
+
+<!-- A module script that fails to import never runs, so `app.js` cannot report its own absence.
+     This classic script runs first and catches what the browser reports: failed imports, and any
+     uncaught error later. The message goes to the page's red strip and, over the dev server, to
+     `/_log`, which prints it in the console next to the Run button. A `file://` open has no server,
+     so the second half is best-effort. -->
+<script>
+  function report(message) {
+    const slot = document.getElementById('error');
+    slot.textContent = slot.textContent ? `${slot.textContent}\n${message}` : message;
+    fetch('/_log', { method: 'POST', body: message }).catch(() => {});
+  }
+  window.addEventListener('error', (event) => report(`${event.message} @ ${event.filename || 'the page'}`));
+</script>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
