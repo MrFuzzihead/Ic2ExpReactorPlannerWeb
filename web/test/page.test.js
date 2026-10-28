@@ -506,6 +506,27 @@ assert(Number(cellAfter.replace('px', '')) % 16 === 0, `a resize set a cell of $
 assert(boardElement.kids.filter((slot) => slot.kids.length > 0).every((slot, i) => slot === iconsBeforeResize[i]), 'a resize redrew the icons instead of reusing them');
 assert(boardElement.props.get('--cols') === colsBefore, 'a resize changed the column count');
 
+// The coarse-pointer path, which is the one a phone takes. Two claims the desktop path does not
+// make: the cell is allowed to leave the 16-pixel lattice (so the frame can fit a 375 px screen),
+// and it never grows past the width that is actually there. Measured in a real iPhone viewport by
+// `tools/probe-iphone.mjs` -- 37 px cells and no horizontal overflow at 375 -- and asserted here at
+// the arithmetic's edges, because the shim has no stylesheet to give the gaps and padding.
+globalThis.window.matchMedia = (media) => ({ media, matches: media === '(pointer: coarse)', addEventListener: () => {}, removeEventListener: () => {} });
+globalThis.window.innerWidth = 375;
+globalThis.window.innerHeight = 667;
+globalThis.window.screen = { width: 375, height: 667 };
+globalThis.window.dispatchEvent({ type: 'resize' });
+const phoneCell = Number(boardElement.props.get('--cell').replace('px', ''));
+assert(Number.isFinite(phoneCell) && phoneCell >= 24, `a phone viewport produced a ${phoneCell} px cell`);
+assert(phoneCell * boardElement.kids.length / 6 <= 375, `a phone's board is ${phoneCell * 9} px wide on a 375 px screen`);
+assert(phoneCell <= 72, `a phone viewport asked for ${phoneCell} px cells, past the 72 px ceiling`);
+// Back to a monitor, so nothing after this point reads the phone's width.
+globalThis.window.matchMedia = (media) => ({ media, matches: false, addEventListener: () => {}, removeEventListener: () => {} });
+globalThis.window.innerWidth = 1798;
+globalThis.window.innerHeight = 952;
+globalThis.window.screen = { width: 1920, height: 1080 };
+globalThis.window.dispatchEvent({ type: 'resize' });
+
 // ---------------------------------------------------------------------------
 // Clear Grid: the desktop's button, and the one control that acts without a target
 // ---------------------------------------------------------------------------

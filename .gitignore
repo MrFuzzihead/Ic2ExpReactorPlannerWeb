@@ -33,6 +33,8 @@ src/main/resources/mixins.*.json
 erpprefs.xml
 # The IDE preview server's mirrored log (tools/serve.mjs --log); see webPreview in build.gradle.
 /web-preview.log
+# Its single-instance record: a PID (and port) that `--stop` and `--status` read.
+/.web-preview.pid
 
 # Probe artifacts. `tools/probe-*.mjs` are the source: they generate a `web/ui/probe-*.html` over
 # `web/ui/index.html`, and a headless-browser run of that page leaves a screenshot, a DOM dump and
@@ -47,3 +49,4 @@ erpprefs.xml
 /out.txt
 /tmp-dom.html
 /img.png
+/probe-*.json

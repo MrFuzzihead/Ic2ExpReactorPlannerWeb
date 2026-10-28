@@ -1450,3 +1450,106 @@ too — the label equals the bundle's, the tap adds nothing to the error strip, 
 redrawn. `i18n.test.js` needed nothing: the merge was already its oracle. `check-imports` stays at
 70 edges, which is the honest sign that these two items added controls and data rather than a new
 layer.
+
+## 37. The Run button was starting a server on every Gradle invocation
+
+The `webPreview` task was written as `task webPreview { … }`, and a task's closure *is its
+configuration*. Everything inside ran during configuration, which is every Gradle invocation. So
+`./gradlew help` started a preview server, then blocked in `waitFor()` on it until something killed
+the build. Measured, not deduced: `./gradlew help --offline` ran for the full 100-second timeout,
+wrote `serving … at http://127.0.0.1:8123/web/ui/` to `web-preview.log`, and died with the daemon
+("Gradle build daemon disappeared unexpectedly"). A build, a test run, or an IDE sync would have done
+the same, and `webStop` could never run because starting the build started the thing it was meant to
+stop.
+
+The body is now in `doLast` and registered lazily (`tasks.register('webPreview')`), which is what the
+task always meant.
+
+**Stopping it.** A server started from a Gradle task is a grandchild of the daemon, not of the run,
+so IntelliJ's Stop cancels the build and leaves the listener behind — the visitor's original
+complaint. Four things now cover that, in order of how directly they work:
+
+1. The wait loop polls (`server.waitFor(250, MILLISECONDS)`) instead of blocking forever, so a
+   cancelled build can act: an interrupt throws, the `finally` destroys the child and its
+   descendants, and the task exits.
+2. `--die-with-parent` on the server: the JVM holds the write end of the child's stdin, so a daemon
+   that exits (or a launcher that is killed) closes the pipe, and stdin ending is the server's cue to
+   close. Verified by stopping the daemon: `stdin closed: the launcher is gone, closing`, the port
+   free, the PID file gone.
+3. A `ppid` poll for the launcher that dies without closing its pipe (a killed shell wrapper).
+4. `webStop`, unchanged in purpose and now correct, for the one case Gradle does not report as a
+   cancel.
+
+The guard on (2) matters: `--die-with-parent` only arms when stdin is a pipe. Started with
+`> /dev/null 2>&1 &` — which is how a shell backgrounds it, and how the first version of this fix
+tested — stdin is a character device that reads EOF at once, and the server exited immediately.
+
+**One server at a time, and only ours.** `.web-preview.pid` records the PID and the port.
+`--stop` reads it, asks the OS whether the PID is alive, and checks its command line contains
+`serve.mjs` before killing anything; a stranger on 8123 is reported, not murdered. A second start
+refuses rather than fighting over the port. `--status` answers the same question without stopping
+anything.
+
+**The rest of the server.** Three bugs found while in there: the request path was pasted onto the
+repository root and read, so `GET /../../…` served files outside the tree (now resolved and checked,
+403 otherwise); the path separators were rewritten to `\` unconditionally, which is Windows-only; and
+every response had no cache directive, so an edited module could be served from the browser's cache —
+`cache-control: no-store` is the difference between a dev server and a stale one. The browser opener's
+`spawn` errors now land in a listener instead of killing the process (`spawn` reports ENOENT
+asynchronously, so the `try/catch` around it never fired).
+
+## 38. The phone pass: the board did not fit an iPhone
+
+§25 left the phone layout open because the handset was not on the machine and a desktop browser
+answers `coarse=false` at any width. That is no longer a blocker: `tools/probe-iphone.mjs` drives
+Chrome over the DevTools protocol, sets `Emulation.setDeviceMetricsOverride` per device and
+`Emulation.setTouchEmulationEnabled` — which is what actually flips `pointer: coarse` — and reads the
+layout back. No dependency; Node 24 has a global `WebSocket`, and `--remote-debugging-port=0` writes
+the chosen port into the profile's `DevToolsActivePort`.
+
+At the first measurement (sample design, 375 × 667):
+
+```
+se       inner=480x854  coarse=true cell=48 board=466x313 overflowX=105 codeFont=12 tapMin=38 under40=15/97
+iphone15 inner=480x1041 coarse=true cell=48 board=466x313 overflowX=87  codeFont=12 tapMin=38 under40=18/97
+promax   inner=481x1041 coarse=true cell=48 board=466x313 overflowX=51  codeFont=12 tapMin=38 under40=4/97
+```
+
+Four faults, and the first one is the reason the other three were invisible:
+
+- **The board was 466 px wide on a 375 px screen.** `sizeBoard` spent 6 % of the width on a margin
+  that does not exist, then snapped the cell up to the next multiple of 16 for sprite-pixel purity —
+  on a phone, where every pixel of pitch is also a pixel of tap target. The snap is the right rule
+  for a monitor and the wrong one for a handset; it now applies only to a fine pointer.
+- **The layout viewport had already been widened to 480 before the cell was chosen.** That is
+  Chrome's shrink-to-fit: content wider than the viewport widens the layout viewport, the wider
+  viewport produced a bigger cell on the next `resize`, and the board stayed 466. The width anchor is
+  now `min(innerWidth, screen.width)` — the screen does not move, so the loop cannot close.
+- **iOS auto-zooms a focused control under 16 px** and does not zoom back out. `#code` is 12 px, so
+  tapping the code field — the one interaction this app exists for — jumped the page to 1.3× and
+  left it there. 16 px on a coarse pointer.
+- **38 px tap targets**, against the 40 px `WEB_DESIGN.md` §1 asks for, plus `touch-action: none` on
+  the board, which made the top third of the screen unscrollable by thumb.
+
+Also added: `viewport-fit=cover` with `env(safe-area-inset-*)` padding (the notch and the home bar),
+`-webkit-text-size-adjust: 100%` (Safari's landscape text inflation), and tighter board gaps on a
+coarse pointer so the fit has pixels to spend.
+
+After, same probe, same design:
+
+```
+se       375x667  coarse=true cell=37 board=357x240 overflowX=0 codeFont=16 tapMin=40 under40=0/97
+iphone15 393x852  coarse=true cell=39 board=375x252 overflowX=0 codeFont=16 tapMin=40 under40=0/97
+promax   430x932  coarse=true cell=43 board=411x276 overflowX=0 codeFont=16 tapMin=40 under40=0/97
+desktop  1440x900 coarse=false cell=80 board=754x505 overflowX=0 codeFont=12 tapMin=25 under40=32/97
+```
+
+The desktop row is the control: `cell=80`, `754 × 505`, exactly what §27 measured, so the fine-pointer
+path did not move. The board now ends at 275–311 px instead of 354, the code field starts at 649–685
+instead of 728, and the widest phone shows no horizontal overflow at all. `probe-iphone-<device>.png`
+is a screenshot per device, because a number says a control is 40 px and no number says the page still
+looks like a planner.
+
+`page.test.js` grew the coarse claim under the shim — the cell may leave the 16-pixel lattice, it never
+exceeds the width that is there, and it stays under the 72 px ceiling — because the shim's
+`matchMedia` can be pointed at either answer. Suite: 17 of 17 files green, `check-imports` 70 edges.

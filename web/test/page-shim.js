@@ -115,6 +115,13 @@ const windowListeners = new Map();
 globalThis.window = {
   innerWidth: 390,
   innerHeight: 844, // a phone: the tight case
+  // The device's own width, which is what the cell math anchors on: a layout viewport can be widened
+  // by content that overflows, a screen cannot. A monitor number here, so the shim's 390 px window
+  // is the binding constraint and a test that widens the window still gets the window's answer.
+  screen: { width: 1920, height: 1080 },
+  // No media engine in Node, so the answer is the desktop's: every shim test exercises the fine
+  // pointer path (16-pixel cells), and `page.test.js` covers the coarse path by answering true.
+  matchMedia: (media) => ({ media, matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
   addEventListener: (type, handler) => { windowListeners.set(type, handler); },
   // A browser matches an Event to its listeners by `type`; a test's plain object carries the same
   // one field a resize listener needs, and no layout.
@@ -123,6 +130,18 @@ globalThis.window = {
     if (handler !== undefined) handler(event);
   },
 };
+
+/** Computed styles, as far as the cell math can tell. There is no stylesheet here, so every value
+ * that comes back is the inline one -- which is empty -- and `parseFloat('') || 0` is the zero the
+ * shim's single 3 px assumption would otherwise have to hardcode. Kept because `sizeBoard` reads the
+ * board's gaps and padding to compute a fit, and a missing function would be a page that cannot run
+ * under test at all. */
+globalThis.getComputedStyle = (node) => ({
+  getPropertyValue: (name) => node?.props?.get(name) ?? '',
+  columnGap: '',
+  paddingLeft: '',
+  paddingRight: '',
+});
 
 const storage = { blob: null };
 globalThis.localStorage = {

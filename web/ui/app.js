@@ -161,22 +161,53 @@ async function loadEngineData() {
   return parseCatalog(await catalogText.text());
 }
 
-/** The board's cell size: the largest multiple of 16 that fits the viewport both ways, capped at 6x
- * so a monitor does not turn a 16-pixel sprite into a wall of blurred blocks. Sprite pixels stay
- * square: every icon is 16 x 16, so the cell is an integer multiple of 16, and a 2.5x cell would
- * render some sprite pixels 2 wide and others 3, which is what makes copied game art look warped.
+/** The board's cell size: the largest square that fits the viewport both ways.
+ *
+ * Two rules, because a phone and a monitor need different things from the same frame:
+ *
+ *  - **A fine pointer keeps whole sprite pixels.** Every icon is 16 x 16, so a cell that is a
+ *    multiple of 16 renders each sprite pixel as an exact 2x2 or 3x3 block; a 2.5x cell renders some
+ *    sprite pixels 2 wide and others 3, which is what makes copied game art look warped. There is
+ *    room for that on a monitor, so the cell snaps to 16 and stays snapped.
+ *  - **A coarse pointer fits the frame and sizes the target.** Nine columns across a 375 px iPhone
+ *    leave 37 px per cell once the gaps and padding are paid; snapping to 32 threw away those five
+ *    pixels and produced a board 466 px wide -- measured, not imagined: 105 px of horizontal
+ *    overflow, and the layout viewport widened to 480 to accommodate it. So a coarse pointer takes
+ *    the largest whole pixel count that fits, and `image-rendering: pixelated` keeps the sprites
+ *    hard-edged at whatever scale that lands on.
+ *
+ * The width is anchored on `min(innerWidth, screen.width)` because a widened layout viewport is
+ * self-fulfilling: the overflowing board widened it, the widened width made the next resize pick a
+ * bigger cell, and the loop kept 466 px of board on a 375 px screen. `screen.width` is the device's
+ * own answer and does not move; on a desktop the window is always the smaller of the two.
+ *
+ * The gaps and padding are read from the stylesheet rather than duplicated here, because the coarse
+ * block changes both.
  *
  * Split out of `render` because a window resize changes the viewport without changing the design,
  * and nothing else re-runs the math: a board loaded in a 540 x 290 window stayed at 27 px per cell
  * when the window grew to 1798 x 952, which is what left the board floating in dead space at a
  * monitor width. */
 function sizeBoard(boardElement, bounds) {
+  const computed = getComputedStyle(boardElement);
+  const gap = parseFloat(computed.columnGap) || 0;
+  const padding = (parseFloat(computed.paddingLeft) || 0) + (parseFloat(computed.paddingRight) || 0);
+  const bodyStyle = getComputedStyle(document.body);
+  const bodyPadding = (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0);
+
+  const width = Math.min(window.innerWidth, window.screen?.width || Infinity) - bodyPadding;
+  const height = window.innerHeight * 0.62;
   const available = Math.min(
-    window.innerWidth * 0.94 / bounds.cols,
-    window.innerHeight * 0.62 / bounds.rows,
+    (width - padding - gap * (bounds.cols - 1)) / bounds.cols,
+    (height - padding - gap * (bounds.rows - 1)) / bounds.rows,
   );
-  const scale = Math.max(1, Math.min(6, Math.floor(available / 16)));
-  boardElement.style.setProperty('--cell', `${scale * 16}px`);
+
+  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches === true;
+  const cell = coarse
+    ? Math.max(24, Math.min(72, Math.floor(available)))
+    : Math.max(16, Math.min(96, Math.floor(Math.max(16, available) / 16) * 16));
+
+  boardElement.style.setProperty('--cell', `${cell}px`);
   boardElement.style.setProperty('--cols', String(bounds.cols));
 }
 

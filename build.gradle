@@ -195,40 +195,97 @@ publishing {
 }
 
 
-// Web preview: the green Run button in an IDE running in Community mode, where the Node.js
-// run configurations and the JavaScript debugger are Ultimate-only features. The server itself
-// stays tools/serve.mjs so the two paths cannot drift apart.
-task webPreview {
+// Web preview: the green Run button. The server itself stays tools/serve.mjs so a terminal and the
+// button cannot drift apart.
+//
+// Everything happens in `doLast`. That is not style: a statement inside a task's configuration
+// closure runs during *configuration*, which is every Gradle invocation, so the first version of
+// this task started a server and then blocked on it for `gradlew help`, `gradlew build`, and every
+// IDE sync. `./gradlew help --offline` was measured starting it and hanging until interrupted.
+tasks.register('webPreview') {
+    group = 'web'
     description 'Serve the repository and open web/ui/ in the default browser; the log goes to web-preview.log.'
-    if (!file('tools/serve.mjs').exists()) {
-        out.println('tools/serve.mjs is missing — nothing to serve')
-    } else {
-        // The button is idempotent: --stop frees the port first, so a second press replaces the
-        // server instead of leaving it on a busy port. Its lines go to the log, same as the server's.
-        // Waiting matters: `execute` starts the child and returns immediately, and a stop that is
-        // still running when the new server binds the port finds that new server in its netstat and
-        // kills it — the press then leaves nothing listening, which reads in the browser as a page
-        // that cannot be reached at all.
-        def freed = ('node tools/serve.mjs --stop --log web-preview.log').execute()
-        freed.waitFor()
-        // An IDE Run console captures the child's output and only shows it when the child exits, and
-        // this child never exits, so the same lines go to a file the editor can open.
-        def server = ('node tools/serve.mjs --open --log web-preview.log').execute()
-        def code = server.waitFor()
-        if (code != 0) {
-            out.println("the preview server exited with ${code} — see web-preview.log")
+
+    doLast {
+        def script = file('tools/serve.mjs').absolutePath
+        if (!file('tools/serve.mjs').exists()) {
+            logger.lifecycle('tools/serve.mjs is missing — nothing to serve')
+            return
+        }
+
+        // One press, one server. `--stop` ends whatever an earlier press left behind, and it only
+        // kills a PID whose command line is this script (a stranger on 8123 is reported, not
+        // murdered).
+        def stop = new ProcessBuilder('node', script, '--stop').redirectErrorStream(true).start()
+        stop.inputStream.text
+        stop.waitFor()
+
+        // `--die-with-parent` is belt and braces: the child's stdin is a pipe this JVM holds, so the
+        // daemon exiting ends the server even if nothing below runs.
+        // A headless machine (and the probes) can run the same task without a browser:
+        // `./gradlew webPreview -PwebPreviewOpen=false`.
+        def launch = ['node', script, '--die-with-parent', '--log', 'web-preview.log']
+        if (project.findProperty('webPreviewOpen') != 'false') launch << '--open'
+        def server = new ProcessBuilder(launch).redirectErrorStream(true).start()
+
+        // The Run console shows what Gradle logs as the build proceeds, so the child's lines are
+        // forwarded rather than left in web-preview.log. A daemon thread, because the reader blocks
+        // on the pipe for as long as the server lives.
+        def pump = new Thread({
+            server.inputStream.eachLine { line -> logger.lifecycle(line) }
+        }, 'web-preview-output')
+        pump.daemon = true
+        pump.start()
+
+        def handle = server.toHandle()
+        def takeDown = {
+            // Descendants too: `node --open` may have started a browser, and a killed Gradle build
+            // must not leave either behind.
+            handle.descendants().each { it.destroyForcibly() }
+            handle.destroyForcibly()
+            handle.onExit().get(10, java.util.concurrent.TimeUnit.SECONDS)
+        }
+
+        try {
+            // Not `waitFor()`. A build that is cancelled has to be able to act on it, and a bare
+            // waitFor() swallows the interruption until the child exits -- which for a server is
+            // never, so the Stop button would hang instead of stopping. Polling for a quarter of a
+            // second costs nothing and lets the cancel path below run.
+            while (!server.waitFor(250, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                // A cancelled build arrives as an interrupt on this thread.
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException('the run was stopped')
+                }
+            }
+            if (server.exitValue() != 0) {
+                logger.lifecycle("the preview server exited with ${server.exitValue()} — see web-preview.log")
+            }
+        } catch (InterruptedException stopped) {
+            logger.lifecycle('stopping the preview server with the run')
+            takeDown()
+            Thread.currentThread().interrupt()
+        } finally {
+            // Every other way out of a build (an exception in another task, a killed daemon, a
+            // crash) lands here, and none of them should leave a listener behind.
+            if (server.isAlive()) takeDown()
         }
     }
 }
 
-// The server is orphaned when the run ends (Gradle 8 reaps the child handle), so stopping it
-// needs its own button.
-task webStop {
+// The server is a child of the Gradle daemon rather than of the run, so a Stop that Gradle does not
+// report as a cancel can leave it listening. This is the explicit escape hatch.
+tasks.register('webStop') {
+    group = 'web'
     description 'Stop the preview server listening on 8123.'
-    def stop = ('node tools/serve.mjs --stop --log web-preview.log').execute()
-    def code = stop.waitFor()
-    if (code != 0) {
-        out.println('the preview server is still there — stop it yourself')
+
+    doLast {
+        def stop = new ProcessBuilder('node', file('tools/serve.mjs').absolutePath, '--stop')
+            .redirectErrorStream(true)
+            .start()
+        stop.inputStream.eachLine { line -> logger.lifecycle(line) }
+        if (stop.waitFor() != 0) {
+            logger.lifecycle('the preview server is still there — stop it yourself')
+        }
     }
 }
 

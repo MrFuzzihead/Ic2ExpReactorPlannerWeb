@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>IC2 Extended Reactor Planner</title>
 <!-- The tab icon is a real component sprite rather than a new asset, and it has to name the path
      explicitly: a browser that gets a 404 here also prints that 404 in the dev console. -->
@@ -87,7 +87,11 @@
     padding: 5px;
     background: var(--panel);
     border-radius: 6px;
-    touch-action: none;
+    /* `manipulation`, not `none`. The board listens for `click`, so nothing needs the gesture
+       suppressed, and `none` made the top third of a phone screen unscrollable: a thumb that landed
+       on the grid could no drag the page. `manipulation` still removes the double-tap zoom and the
+       300 ms delay. */
+    touch-action: manipulation;
   }
 
   #board > div {
@@ -766,13 +770,34 @@
      desktop spacing the captures measured, a coarse one gets the same controls with the padding
      that reaches 40 px. Nothing here changes what the page shows a desktop visitor. */
   @media (pointer: coarse) {
+    /* The notch and the home bar sit over the page once `viewport-fit=cover` lets it reach the
+       screen's corners, so the padding is what keeps a control out from under them. `env()` is 0 on
+       a device without insets, which is why `max()` is the whole expression rather than an override. */
+    body {
+      padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+        max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+      /* Safari inflates text in landscape unless it is told not to. The page's type scale is the
+         design's, not the reader's guess at it. */
+      -webkit-text-size-adjust: 100%;
+    }
+
+    /* Tighter gaps and padding than the monitor uses, because every pixel here is a pixel of cell:
+       nine columns across 375 px is 41 px of pitch before the chrome, and 3 px gaps spent 24 px of
+       it. `sizeBoard` reads both values, so the cell math needs no second copy of the number. */
+    #board { gap: 2px; padding: 4px; }
+
+    /* iOS Safari zooms the page in when a control with `font-size` under 16 px takes focus, and
+       does not zoom back out afterwards -- a 12 px field is therefore a page that jumps to 1.3x and
+       stays there the moment the visitor taps the code. 16 px is the smallest that does not. */
+    #code { font-size: 16px; }
+
     #modes [data-mode], #copy, #cleargrid, #simulate, #palette [data-axis], #automation [data-toggle],
     #materials [data-gt], #materials [data-alloy], #comparison [data-toggle], #comparison [data-copy-comparison],
     #config [data-style],
-    #config [data-flag], #config [data-reset-pulse], #config [data-legacy] { padding: 11px 12px; }
-    #automation input[data-field], #config input[data-field] { padding: 10px 12px; }
-    #chambers input[data-field] { padding: 10px 12px; width: 88px; }
-    #palette [data-id] { font-size: 13px; }
+    #config [data-flag], #config [data-reset-pulse], #config [data-legacy] { padding: 11px 12px; min-height: 40px; }
+    #automation input[data-field], #config input[data-field] { padding: 10px 12px; min-height: 40px; }
+    #chambers input[data-field] { padding: 10px 12px; width: 88px; min-height: 40px; }
+    #palette [data-id] { font-size: 13px; min-height: 44px; }
     #palette [data-id] img { width: 28px; height: 28px; }
   }
 
