@@ -526,9 +526,25 @@ async function main() {
   // A window resize changes the viewport without touching the design, so nothing else re-runs the
   // cell math and the board keeps the size it was loaded at. Only the custom property is rewritten:
   // no re-decode, no re-render, the slots stay where they are.
-  window.addEventListener('resize', () => {
+  //
+  // `resize` alone is not enough: a browser's page zoom and an OS display-scale change move the
+  // layout viewport without always firing it, and the board then keeps a cell size that is wrong
+  // for the pixels it is drawn on. A `ResizeObserver` on the document element fires whenever its
+  // box changes, which covers zoom, and it is also what a foldable or a split-view pane looks like.
+  // Both paths call the same function, so a browser that fires both just sizes the board twice.
+  const resizeBoard = () => {
     if (boardBounds !== null) sizeBoard(boardElement, boardBounds);
-  });
+  };
+  window.addEventListener('resize', resizeBoard);
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(resizeBoard).observe(document.documentElement);
+  }
+  if (window.visualViewport !== undefined) {
+    // Safari fires this when the URL bar collapses, which is the one moment a phone's usable height
+    // changes under a page that never scrolls a window. The height never binds the cell on a phone
+    // (the width does), so this is a no-op there and a correction on a short desktop window.
+    window.visualViewport.addEventListener('resize', resizeBoard);
+  }
   if (textarea.value !== '') writeStoredCode(textarea.value);
 }
 

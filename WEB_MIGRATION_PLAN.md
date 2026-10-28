@@ -974,6 +974,8 @@ diff), `code-fuzz`, `code-roundtrip`, `inspect`, `materials`, `page`, `palette` 
 
 ## 25. The phone pass is deferred, not skipped
 
+**Closed in §38 and §40.** The handset never arrived, so the phone was emulated instead: `tools/probe-iphone.mjs` drives Chrome over the DevTools protocol, which is the only way to make a desktop browser answer `pointer: coarse`. The paragraph below is the state of things before that.
+
 §20's phone-width proof stays open: `tools/probe-phone.mjs` writes the page that reads a phone's own
 report of `pointer: coarse`, viewport width, and tap-target heights into the status strip, and
 `tools/serve.mjs` prints the LAN address under the local one (Windows reports the LAN route with
@@ -1553,3 +1555,85 @@ looks like a planner.
 `page.test.js` grew the coarse claim under the shim — the cell may leave the 16-pixel lattice, it never
 exceeds the width that is there, and it stays under the 72 px ceiling — because the shim's
 `matchMedia` can be pointed at either answer. Suite: 17 of 17 files green, `check-imports` 70 edges.
+
+## 39. The oracle moves into the repository, and the gate becomes one command
+
+The audit of the harness found three things, all of them the same shape: a claim that was true on
+the machine that made it and nowhere else.
+
+**`test/format-oracle.mjs` read files outside git.** Three fixtures came from
+`../erp-java-ref/probe/`, a sibling working copy with no repository of its own, so the 1614 checks
+it reports could not run on a clean clone at all. It also was not part of any suite run -- the loop
+was over `web/test/*.test.js` -- which is why nobody noticed. The probe outputs are now in
+`testResources/oracle/`, the test reads them there, and `tools/test.mjs` runs it.
+
+**Two bugs fell out of rebuilding it.** The sentinel rows at the end of the format probe are written
+`DF huge |?|`, and the parser matched `^(\S+) +\|` -- a token, then spaces, then a pipe, which no row
+satisfies because the label follows the formatter name. Every one of those rows was skipped while
+the file reported "1614 checks, 0 mismatches". With the parser fixed, two real mismatches appeared:
+
+- `DecimalFormat` writes **∞**, not "Infinity" (`String(Infinity)` is a JS-ism, and the two other
+  ports in `format.js` -- `Double.toString` and `String.format("%f")` -- correctly spell it out).
+- Rounding uses the exact binary value (`-0.015` is `-0.01`, because the double is
+  0.0149999999999999994), while **printing** uses the shortest round-trip digits padded with zeros
+  (`Double.MAX_VALUE` is 179,769,313,486,231,570 followed by 292 zeros, not its 309-digit exact
+  expansion). Both rules now hold; the check count went 1614 → 1620 with no skips.
+
+The committed format-probe fixture carried `?` where the infinity symbol belonged: the original
+capture went through a console encoding that could not carry it. It is re-captured as UTF-8, which
+is why `regenerate.mjs` pins `stdout.encoding` alongside the locale.
+
+**The fixtures are now reproducible from this repository.** The harness (10 small Java files) is
+vendored in `tools/oracle/java/`, and it compiles against this repo's own
+`src/Ic2ExpReactorPlanner/` -- the engine the fixtures came from -- so `node
+tools/oracle/regenerate.mjs` rebuilds and diffs all eleven fixtures with no external checkout:
+
+```
+node tools/oracle/regenerate.mjs           # verify; exit 1 on drift
+node tools/oracle/regenerate.mjs --write   # refresh
+node tools/oracle/regenerate.mjs --list    # what comes from which dumper
+```
+
+Nine fixtures are a dumper's stdout (LF-normalized; the header lines are documentation and are
+preserved rather than regenerated), and two are projections checked by rebuilding the derivation:
+`corpus-designs.json` from `corpus-codes.tsv` (unpacking `CorpusCodes`'s `"00"` GT-switch field) and
+`component-code-defaults.json` from `Defaults`'s payload plus its committed annotation. All eleven
+match the committed files today, so the port's oracle is a closed loop inside this repository.
+
+**Two runners.** `node tools/test.mjs` runs 19 test runs -- the 18 files under `web/test` plus the
+formatting oracle, with `page.test.js` run twice -- and prints each file's own claim line.
+`node tools/verify.mjs` adds the import graph, the Java oracle, and a real browser load at
+1440 × 900 and 375 × 667, asserting the four phone rules by measurement (no horizontal overflow,
+`pointer: coarse`, a board that fits, a cell of at least 24 px) plus no page error, 54 slots, 19
+icons, no broken image and no console exception. Five check groups, 32 seconds, exit code.
+
+The double run found a test that had never passed: `page.test.js` claims the empty board is a
+legitimate state, but every claim in `checkValidBoard` is about a design's contents -- the material
+list names the plating's alloy -- so `ERP_CODE=` failed on line 460 and had presumably failed since
+that assertion was written. The empty case is now its own branch with its own claims (54 slots, no
+icons, a field that decodes to nothing), and the suite runs both.
+
+## 40. The phone page, part two: one screen for the loop
+
+§38 made the board fit an iPhone. It did not make the page short: measured bands at 375 × 667 were
+`board=35..275, chambers=285, temperature=368, modes=416, code=575, palette=711`, so the code field
+-- the string the visitor came for -- began below the 667 px fold, and the mode chips spent 149 px
+on three wrapped rows doing it.
+
+The chips are a single horizontally scrolling row on a coarse pointer now, which is the chip row's
+own idiom on a phone and leaves the last chip visibly cut off as the affordance that there are more.
+`code` moved from 575 to 472, and the whole loop -- board, chambers, readout, modes, code, buttons --
+ends around 750 px, or about one screen of scrolling rather than three. The palette still runs long,
+but it is a drawer: it is open because the default mode is `Place`, and closing it is one tap.
+
+`page.test.js` gained the phone contract as stylesheet assertions, because these are exactly the
+rules that were silently absent: `viewport-fit=cover`, `touch-action: manipulation` on the board
+(`none` made the board unscrollable by thumb), safe-area insets, a 16 px code field (iOS zooms a
+focused control below 16 and does not zoom back), a non-wrapping chip row, and 40 px targets.
+
+**Zoom.** `resize` is not the only way a browser's layout box changes -- page zoom, an OS display
+scale, and a split-view pane can move it without firing the event, and the board then keeps a cell
+size that is wrong for its pixels. The page installs a `ResizeObserver` on the document element and
+listens to `visualViewport` as well, all three calling the same `sizeBoard`. The shim grew a
+recording `ResizeObserver`, and the test fires it without dispatching a resize: only the observer
+path can have re-sized the board.

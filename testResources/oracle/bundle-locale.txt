@@ -1,0 +1,18 @@
+Simulation.HeatOutputsBeforeOverheated => Total output before the reactor overheated: %s HU (%s HU/t average, %s HU/t minimum, %s HU/t max)
+
+Simulation.HeatOutputsBeforeOverheated => Total output before the reactor overheated: %s HU (%s HU/t average, %s HU/t minimum, %s HU/t max)
+
+Simulation.EUOutputsBeforeOverheated => Total output before the reactor overheated: %s EU (%s EU/t average, %s EU/t min, %s EU/t max)
+
+Simulation.EUOutputsBeforeOverheated => Total output before the reactor overheated: %s EU (%s EU/t average, %s EU/t min, %s EU/t max)
+
+Simulation.AbortedByError => Simulation aborted by a JVM error: %s
+
+Simulation.AbortedByError => Simulation aborted by a JVM error: %s
+
+UI.SimulateButton => Simulate
+UI.SimulateButton => 模拟
+Simulation.ReactorOverheatedTime => Reactor overheated at %,d seconds.
+
+Simulation.ReactorOverheatedTime => 反应堆在 %,d 秒时过热.
+

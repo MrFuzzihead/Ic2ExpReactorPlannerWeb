@@ -791,6 +791,22 @@
        stays there the moment the visitor taps the code. 16 px is the smallest that does not. */
     #code { font-size: 16px; }
 
+    /* One row that scrolls, not three that push. Ten chips in a wrapping flex box cost 149 px of
+       a 667 px screen -- measured, `modes=416..565` -- and the code field, which is the thing the
+       visitor came for, started below the fold because of it. A single scrollable row is the
+       chip row's own idiom on a phone; the last chip being cut off is the affordance that says
+       there are more. The scrollbar is hidden because the platform draws its own on touch. */
+    #modes {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+      margin-bottom: 8px;
+    }
+    #modes::-webkit-scrollbar { display: none; }
+    #modes [data-mode] { flex: 0 0 auto; }
+
     #modes [data-mode], #copy, #cleargrid, #simulate, #palette [data-axis], #automation [data-toggle],
     #materials [data-gt], #materials [data-alloy], #comparison [data-toggle], #comparison [data-copy-comparison],
     #config [data-style],

@@ -272,7 +272,10 @@ server.on('error', (problem) => {
   rmSync(PID_FILE, { force: true });
 });
 
-const url = `http://127.0.0.1:${PORT}/web/ui/`;
+// `--port 0` asks the OS for a free port (the verify gate does, so it never collides with the
+// preview server the IDE is running), and the number it picked is only knowable after `listen`.
+let boundPort = PORT;
+const url = () => `http://127.0.0.1:${boundPort}/web/ui/`;
 
 /** Every exit path unlinks the PID file, or the next start refuses to run over a ghost. */
 function quitBecause(line) {
@@ -335,9 +338,12 @@ try {
   process.exit(1);
 }
 
-writeFileSync(PID_FILE, `${process.pid}\n${PORT}\n`);
+// `--port 0` asks the OS for a free port (the verify gate does, so it never collides with the
+// preview server the IDE is running); the number it picked is only knowable after `listen`.
+boundPort = server.address().port;
+writeFileSync(PID_FILE, `${process.pid}\n${boundPort}\n`);
 
-say(`serving ${ROOT} at ${url} — Ctrl+C to stop`);
+say(`serving ${ROOT} at ${url()} — Ctrl+C to stop`);
 
 // `listen(PORT)` binds every interface, so a phone on the same Wi-Fi can open the page: it needs an
 // address that names the PC rather than the PC itself, and this is the only place the PC's own
@@ -347,7 +353,7 @@ say(`serving ${ROOT} at ${url} — Ctrl+C to stop`);
 for (const entry of Object.values(networkInterfaces()).flat()) {
   const lan = entry.cidr === undefined ? entry.address : entry.cidr.split('/')[0];
   if (!lan.includes('.') || lan.startsWith('127.') || lan === '0.0.0.0') continue;
-  say(`phone: http://${lan}:${PORT}/web/ui/ — same network as this PC, http not https`);
+  say(`phone: http://${lan}:${boundPort}/web/ui/ — same network as this PC, http not https`);
 }
 
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
@@ -358,11 +364,11 @@ if (OPEN) {
   // `explorer.exe <url>` hands the URL to the registered browser handler; `open` and `xdg-open`
   // are the same trick on the other platforms. Detached, so the server keeps running.
   const [command, args] = process.platform === 'win32'
-    ? ['explorer.exe', [url]]
-    : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+    ? ['explorer.exe', [url()]]
+    : process.platform === 'darwin' ? ['open', [url()]] : ['xdg-open', [url()]];
   // A missing handler arrives as an 'error' event, not a throw: without this listener the server
   // would die of an unhandled ENOENT on a headless machine.
   const opener = spawn(command, args, { detached: true, stdio: 'ignore' });
-  opener.on('error', (problem) => say(`no browser launched (${problem.code ?? problem}): open ${url} yourself`));
+  opener.on('error', (problem) => say(`no browser launched (${problem.code ?? problem}): open ${url()} yourself`));
   opener.unref();
 }

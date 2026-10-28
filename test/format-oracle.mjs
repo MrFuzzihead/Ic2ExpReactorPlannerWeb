@@ -1,6 +1,6 @@
 /**
  * Compares the JS formatter ports against the oracle probe output produced by the real JDK
- * (`FormatProbe.java`, `DecimalProbe.java`, `NotationProbe.java` in ../erp-java-ref/src).
+ * (`FormatProbe.java`, `DecimalProbe.java`, `NotationProbe.java` in tools/oracle/java).
  *
  * Run: node test/format-oracle.mjs
  */
@@ -20,7 +20,7 @@ function check(label, got, want) {
 }
 
 // --- DecimalProbe: both DecimalFormat patterns, plus the raw Double.toString ---------------
-for (const line of readFileSync('../erp-java-ref/probe/decimal-probe.txt', 'utf8').split('\n')) {
+for (const line of readFileSync('testResources/oracle/decimal-probe.txt', 'utf8').split('\n')) {
   const m = line.match(/^(\S+) simple=\[(.*?)\] compare=\[(.*?)\] raw=\[(.*?)\]$/);
   if (!m) continue;
   const v = Number(m[1]);
@@ -30,7 +30,7 @@ for (const line of readFileSync('../erp-java-ref/probe/decimal-probe.txt', 'utf8
 }
 
 // --- FormatProbe: String.format and DecimalFormat side by side -----------------------------
-const formatText = readFileSync('../erp-java-ref/probe/format-probe.txt', 'utf8');
+const formatText = readFileSync('testResources/oracle/format-probe.txt', 'utf8');
 const FORMATTERS = {
   DF: (v) => formatDecimal(PLAIN, v),
   CMP: (v) => formatDecimal(COMPARE, v),
@@ -63,7 +63,13 @@ const SENTINELS = {
   big: 1e20,
   '1e20': 1e20,
 };
-for (const row of (formatText.split(/(?=^DF huge )/m)[1] ?? '').match(/^(\S+) +\|(.*)\|$/gm) ?? []) {
+// The row is `<formatter> <label> |<value>|`, and both halves matter: `DF` is DecimalFormat and
+// `SF` is String.format, which spell infinity differently (`∞` against `Infinity`). The first
+// version of this loop matched `^(\S+) +\|` -- a token followed by spaces and a pipe -- which no
+// row satisfies, because the label follows the formatter name; every sentinel row was skipped and
+// the suite still said "1614 checks, 0 mismatches". Found by rebuilding the fixture with
+// `tools/oracle/regenerate.mjs`.
+for (const row of (formatText.split(/(?=^DF huge )/m)[1] ?? '').matchAll(/^DF (.+?) +\|(.*)\|$/gm)) {
   const [, label, want] = row;
   if (!Object.hasOwn(SENTINELS, label)) continue;
   const v = SENTINELS[label];
@@ -72,7 +78,7 @@ for (const row of (formatText.split(/(?=^DF huge )/m)[1] ?? '').match(/^(\S+) +\
 }
 
 // --- NotationProbe: Double.toString and %.6f across every exponent / digit count -----------
-for (const line of readFileSync('../erp-java-ref/probe/notation2.txt', 'utf8').split('\n')) {
+for (const line of readFileSync('testResources/oracle/notation2.txt', 'utf8').split('\n')) {
   const m = line.match(/^(\S+ )?e=(-?\d+) d=(\d+) \|(.*?)\| \|(.*?)\|$/);
   if (!m) continue;
   const v = Number(m[4]); // the text Java printed, read back as the double it came from

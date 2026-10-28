@@ -34,20 +34,8 @@
  * per device.
  */
 
-import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
-const BROWSERS = [
-  process.env.EDGE,
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Google/Chrome/Application/chrome.exe',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome',
-  '/usr/bin/chromium',
-].filter(Boolean);
+import { writeFile } from 'node:fs/promises';
+import { connect, emulateDevice, evaluate, launchBrowser, sleep } from './lib/cdp.mjs';
 
 const URL = process.env.ERP_URL ?? 'http://127.0.0.1:8123/web/ui/';
 
@@ -59,94 +47,16 @@ const DEVICES = [
   { name: 'desktop', width: 1440, height: 900, dpr: 1, mobile: false },
 ];
 
-const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
-
-/** The first browser that exists, or a sentence saying none does. */
-async function browserPath() {
-  for (const candidate of BROWSERS) {
-    try {
-      await readFile(candidate);
-      return candidate;
-    } catch (problem) {
-      continue;
-    }
-  }
-  throw new Error(`no browser found; set EDGE to one of: ${BROWSERS.join(', ')}`);
-}
-
-const profile = await mkdtemp(join(tmpdir(), 'erp-cdp-'));
-
-async function launch() {
-  const path = await browserPath();
-  const child = spawn(path, [
-    '--headless=new',
-    '--disable-gpu',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--remote-debugging-port=0',
-    `--user-data-dir=${profile}`,
-    'about:blank',
-  ], { stdio: 'ignore' });
-
-  // The port is in the profile directory, not on stdout: with `=0` the browser chooses one.
-  for (let attempt = 0; attempt < 150; attempt += 1) {
-    if (child.exitCode !== null) throw new Error(`the browser exited (${child.exitCode})`);
-    try {
-      const text = await readFile(join(profile, 'DevToolsActivePort'), 'utf8');
-      const port = Number(text.split('\n')[0]);
-      if (port > 0) return { child, port };
-    } catch (problem) {
-      // not written yet
-    }
-    await sleep(100);
-  }
-  child.kill();
-  throw new Error('the browser never wrote DevToolsActivePort');
-}
-
-const { child, port } = await launch();
+const browser = await launchBrowser();
 // A hung browser must not hang the probe; the report is worth more than a perfect run.
 const deadline = setTimeout(() => {
-  child.kill();
+  browser.child.kill();
   console.log('PROBE TIMED OUT after 90s');
   process.exit(2);
 }, 90_000);
 deadline.unref();
 
-const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-const target = targets.find((entry) => entry.type === 'page');
-if (!target) throw new Error('the browser opened no page target');
-
-const socket = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise((open, fail) => {
-  socket.onopen = open;
-  socket.onerror = fail;
-});
-
-let nextId = 0;
-const waiting = new Map();
-socket.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  const done = waiting.get(message.id);
-  if (done) {
-    waiting.delete(message.id);
-    done(message);
-  }
-};
-
-/** One protocol call. Rejects on a protocol error rather than returning an empty result, so a
- * mistyped method reads as a failure instead of a measurement of nothing. */
-function send(method, params = {}) {
-  return new Promise((resolve, reject) => {
-    const id = ++nextId;
-    waiting.set(id, (message) => {
-      if (message.error) reject(new Error(`${method}: ${message.error.message}`));
-      else resolve(message.result);
-    });
-    socket.send(JSON.stringify({ id, method, params }));
-  });
-}
-
+const { send, close } = await connect(browser.target.webSocketDebuggerUrl);
 await send('Page.enable');
 await send('Runtime.enable');
 
@@ -160,13 +70,33 @@ const MEASURE = `(() => {
   const controls = [...document.querySelectorAll('button, input, textarea, [data-id], [data-mode]')];
   const heights = controls.map((node) => Math.round(node.getBoundingClientRect().height)).filter((h) => h > 0);
   const reach = (node) => (node ? Math.round(node.getBoundingClientRect().bottom + window.scrollY) : null);
+  const top = (selector) => {
+    const node = document.querySelector(selector);
+    if (node === null || node.hidden) return null;
+    return Math.round(node.getBoundingClientRect().top + window.scrollY);
+  };
+  // Where each band starts, so a layout change can be argued from the page's own geometry rather
+  // than from a screenshot with a ruler. A band that is absent (a closed panel) is null, not 0.
+  const sections = {
+    design: top('#design'), board: top('#board'), chambers: top('#chambers'),
+    temperature: top('#temperature'), modes: top('#modes'), code: top('#code'),
+    palette: top('#palette'),
+  };
   const boardRect = board ? board.getBoundingClientRect() : null;
   // Who is wider than the viewport. A phone cannot scroll sideways to find a control, so the ones
   // that push the document past clientWidth are named rather than counted.
   const limit = document.documentElement.clientWidth;
+  // A horizontally scrolling band (the chip row, on a phone) is supposed to be wider than the
+  // viewport; only the document is not.
+  const inScroller = (node) => {
+    for (let parent = node.parentElement; parent !== null && parent !== document.body; parent = parent.parentElement) {
+      if (/(auto|scroll)/.test(getComputedStyle(parent).overflowX)) return true;
+    }
+    return false;
+  };
   const overflowing = [...document.querySelectorAll('body *')]
     .map((node) => ({ node, rect: node.getBoundingClientRect() }))
-    .filter((entry) => entry.rect.right > limit + 1 && entry.rect.width > 0)
+    .filter((entry) => entry.rect.right > limit + 1 && entry.rect.width > 0 && !inScroller(entry.node))
     .slice(0, 6)
     .map((entry) => entry.node.tagName.toLowerCase()
       + (entry.node.id ? '#' + entry.node.id : '')
@@ -191,6 +121,7 @@ const MEASURE = `(() => {
     codeFont: code ? px(getComputedStyle(code).fontSize) : null,
     codeTop: reach(code),
     codeW: code ? Math.round(code.getBoundingClientRect().width) : null,
+    sections,
     overflowing,
     title: document.title,
   });
@@ -198,20 +129,9 @@ const MEASURE = `(() => {
 
 const report = [];
 for (const device of DEVICES) {
-  await send('Emulation.setDeviceMetricsOverride', {
-    width: device.width,
-    height: device.height,
-    deviceScaleFactor: device.dpr,
-    mobile: device.mobile,
-    screenWidth: device.width,
-    screenHeight: device.height,
-  });
-  // This is the bit a window resize cannot do: it makes the browser answer `pointer: coarse`.
-  // `maxTouchPoints` has to be 1..16, so the desktop pass turns emulation off instead of asking for
-  // zero touch points (which the protocol rejects).
-  await send('Emulation.setTouchEmulationEnabled', device.mobile
-    ? { enabled: true, maxTouchPoints: 5 }
-    : { enabled: false });
+  // `emulateDevice` is the bit a window resize cannot do: it makes the browser answer
+  // `pointer: coarse`.
+  await emulateDevice(send, device);
   // A fresh navigation per device, so nothing (the resize listener, a stored design) carries over.
   await send('Page.navigate', { url: `${URL}?device=${device.name}` });
   await sleep(1200);
@@ -219,18 +139,9 @@ for (const device of DEVICES) {
   // once against the metrics in force at navigation, so the first pass at a phone width can keep a
   // stale layout viewport. This second call also fires `resize`, which is exactly the path a phone's
   // rotation takes through `sizeBoard` -- so the measurement below is of the listener, not of load.
-  await send('Emulation.setDeviceMetricsOverride', {
-    width: device.width,
-    height: device.height,
-    deviceScaleFactor: device.dpr,
-    mobile: device.mobile,
-    screenWidth: device.width,
-    screenHeight: device.height,
-  });
+  await emulateDevice(send, device);
   await sleep(400);
-  const measured = await send('Runtime.evaluate', { expression: MEASURE, returnByValue: true });
-  if (measured.exceptionDetails) throw new Error(`${device.name}: ${measured.exceptionDetails.text}`);
-  const values = JSON.parse(measured.result.value);
+  const values = JSON.parse(await evaluate(send, MEASURE));
   report.push({ device: device.name, ...values });
 
   // A picture per device, because the numbers say a control is 40 px and no number says the page
@@ -244,12 +155,13 @@ for (const device of DEVICES) {
     + `board=${values.boardW}x${values.boardH} overflowX=${values.overflowX} pageH=${values.pageH} `
     + `boardBottom=${values.boardBottom} codeTop=${values.codeTop} codeFont=${values.codeFont} `
     + `tapMin=${values.tapMin} under40=${values.tapUnder40}/${values.tapCount}`
-    + (values.overflowing.length ? `\n         wide: ${values.overflowing.join(' | ')}` : ''),
+    + (values.overflowing.length ? `\n         wide: ${values.overflowing.join(' | ')}` : '')
+    + `\n         bands: ${Object.entries(values.sections).filter(([, v]) => v !== null).map(([k, v]) => k + '=' + v).join(' ')}`,
   );
 }
 
 await writeFile('probe-iphone.json', `${JSON.stringify(report, null, 2)}\n`);
-socket.close();
+close();
 clearTimeout(deadline);
-child.kill();
+browser.child.kill();
 console.log(`written: probe-iphone.json and probe-iphone-<device>.png (${report.length} devices)`);

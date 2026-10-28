@@ -56,8 +56,34 @@ if (!board.ok) {
   assert(errorElement.textContent !== '', 'an unreadable code left no message behind');
   assert(errorElement.textContent.includes(board.message), 'the message shown is not the decoder message');
   console.log(`page: rejected ${code.slice(0, 24)} with ${errorElement.textContent}`);
+} else if (board.filled === 0) {
+  checkEmptyBoard();
 } else {
   checkValidBoard();
+}
+
+/**
+ * The empty board, which is a legitimate state and the one `ERP_CODE=` asks for.
+ *
+ * It has to be a branch of its own rather than a walk through `checkValidBoard`: that function's
+ * claims are about a design's contents -- the material list names the plating's alloy, a GregTech
+ * version change moves the recipe rows -- and none of them is true of nothing. Running the empty
+ * case through it is what the runner used to do, and it failed; the suite had been reporting only
+ * the sample-design case while the docs said both were covered.
+ */
+function checkEmptyBoard() {
+  const field = globalThis.PAGE.registry.get('code');
+  assert(errorElement.textContent === '', 'an empty field raised an error');
+  assert(boardElement.kids.length === GRID_ROWS * GRID_COLS,
+    `the page drew ${boardElement.kids.length} slots for the empty board`);
+  assert(boardElement.kids.every((slot) => slot.kids.length === 0), 'the empty board drew an icon');
+  assert(boardElement.props.get('--cols') === String(GRID_COLS), 'the empty board lost its column count');
+  assert(boardElement.props.has('--cell'), 'the empty board was not sized');
+  // The field is *allowed* to be empty here: an empty code decodes to the empty design, and the
+  // page only rewrites the field when an edit changes the design. What must hold is that the field
+  // and the board agree.
+  assert(describeBoard(field.value, catalog).filled === 0, 'the field and the empty board disagree');
+  console.log(`page: an empty board, ${boardElement.kids.length} slots, code ${field.value.length} chars, nothing raised`);
 }
 
 function checkValidBoard() {
@@ -527,6 +553,25 @@ globalThis.window.innerHeight = 952;
 globalThis.window.screen = { width: 1920, height: 1080 };
 globalThis.window.dispatchEvent({ type: 'resize' });
 
+// The observer the page also installs. A browser that changes its layout box without firing
+// `resize` -- zoom, a display-scale change, a split-view pane -- is the case the event misses, and
+// this is the assertion that the page watches for it and runs the same math when it happens. Set
+// the viewport to a different size *without* dispatching a resize, then fire the observer: only the
+// observer path can have run.
+const boardObserver = globalThis.PAGE.observers.find((entry) => entry.watching.includes(globalThis.document.documentElement));
+assert(boardObserver !== undefined, 'the page does not observe the document element, so a zoom that fires no resize leaves the board at its old size');
+globalThis.window.innerWidth = 1200;
+globalThis.window.innerHeight = 800;
+const cellBeforeObserver = boardElement.props.get('--cell');
+boardObserver.fire();
+assert(boardElement.props.get('--cell') !== cellBeforeObserver,
+  'the resize observer fired but the cell did not change; the zoom path is wired to nothing');
+
+// Back to the monitor size the rest of the file assumes.
+globalThis.window.innerWidth = 1798;
+globalThis.window.innerHeight = 952;
+globalThis.window.dispatchEvent({ type: 'resize' });
+
 // ---------------------------------------------------------------------------
 // Clear Grid: the desktop's button, and the one control that acts without a target
 // ---------------------------------------------------------------------------
@@ -958,6 +1003,28 @@ assert(errorElement.textContent === errorsBeforeComparisonCopy,
   'a comparison copy answered with a message; the desktop’s button says nothing');
 assert(comparisonRows.kids.map((row) => row.textContent).join('\n') === rowsBeforeComparisonCopy,
   'the comparison copy redrew the panel; the desktop’s button only hands the text over');
+
+// ---------------------------------------------------------------------------
+// The phone contract: four rules that were each a measured bug on a 375 px screen
+// ---------------------------------------------------------------------------
+
+// §38 fixed the board on an iPhone and the phone pass found four faults, none of which a desktop
+// browser reproduces. A stylesheet is text, so these are text claims -- the rendering is
+// `tools/probe-iphone.mjs`'s job -- but a stylesheet claim is enough to stop the fix from being
+// deleted by an innocent-looking edit, which is how the layout got 466 px wide in the first place.
+const coarseBlock = /@media \(pointer: coarse\) \{([\s\S]*?)\n  \}/.exec(pageSource);
+assert(coarseBlock !== null, 'the stylesheet has no coarse-pointer block, so a phone gets the desktop layout');
+const coarse = coarseBlock[1];
+assert(/width=device-width/.test(pageSource) && /viewport-fit=cover/.test(pageSource),
+  'the viewport meta does not opt into the safe area, so the notch draws over the page');
+assert(/#board \{[^}]*touch-action: manipulation/.test(pageSource),
+  'the board still sets touch-action: none, which makes the board unscrollable by thumb');
+assert(/env\(safe-area-inset-bottom\)/.test(coarse), 'the coarse block ignores the home-bar inset');
+assert(/#code \{ font-size: 16px/.test(coarse),
+  'the code field drops below 16 px on a phone, which makes iOS zoom the page in on focus and never zoom back');
+assert(/#modes \{[^}]*flex-wrap: nowrap/.test(coarse) && /overflow-x: auto/.test(coarse),
+  'the mode chips wrap on a phone, which pushes the code field below the fold');
+assert(/min-height: 40px/.test(coarse), 'the coarse block no longer reaches the 40 px tap target');
 
 console.log(`page: ${board.filled} icons, ${chips.length} flag chips, ${shown.length} palette entries, one tap placed and cleared, Pick read ${pickedName}, Inspect read ${readout === null ? 'nothing, the board is empty' : readout.split('\n')[0]}, Automate read ${chosenLine.textContent}, Copy read ${textarea.value.slice(0, 24)}`);
 }

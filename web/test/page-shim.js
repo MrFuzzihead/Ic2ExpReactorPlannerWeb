@@ -180,5 +180,31 @@ function type(node, value) {
   if (handler !== undefined) handler({ target: node });
 }
 
+/** `ResizeObserver`, recorded rather than emulated. The page watches the document element so a
+ * browser zoom or a display-scale change re-sizes the board even when no `resize` event fires; the
+ * shim cannot produce a zoom, but it can prove the observer was created, what it watches, and that
+ * firing it runs the same cell math the resize event does. */
+const observers = [];
+globalThis.ResizeObserver = class {
+  constructor(callback) {
+    this.callback = callback;
+    this.watching = [];
+    observers.push(this);
+  }
+
+  observe(node) {
+    this.watching.push(node);
+  }
+
+  disconnect() {
+    this.watching = [];
+  }
+
+  /** What a browser does when an observed box changes. */
+  fire() {
+    this.callback([], this);
+  }
+};
+
 /** What `page.test.js` asserts on. */
-globalThis.PAGE = { registry, lookedUp, created, storage, element, click, type };
+globalThis.PAGE = { registry, lookedUp, created, storage, element, click, type, observers };

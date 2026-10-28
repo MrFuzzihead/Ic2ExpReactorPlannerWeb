@@ -107,12 +107,31 @@ function roundHalfEven(digits, scale, places) {
 export function formatDecimal(pattern, value) {
   const spec = parseDecimalPattern(pattern);
   if (Number.isNaN(value)) return 'NaN';
-  if (!Number.isFinite(value)) return value > 0 ? 'Infinity' : '-Infinity';
+  // `DecimalFormat` writes the infinity symbol, not the word: `new DecimalFormat("0.##")
+  // .format(Double.POSITIVE_INFINITY)` is "∞". JS's `String(Infinity)` is "Infinity", which is
+  // what the two *other* ports here need -- `Double.toString` and `String.format("%f")` both spell
+  // it out -- so the distinction is real and this is the one place that spells it in a symbol.
+  // The committed probe fixture had "?" where this test reads, because the capture went through a
+  // console encoding that could not carry the character; `tools/oracle/regenerate.mjs` re-captures
+  // it as UTF-8.
+  if (!Number.isFinite(value)) return value > 0 ? '∞' : '-∞';
   const negative = isNegative(value);
   const exact = exactDecimal(Math.abs(value));
   if (exact === null) return '?';
   const rounded = roundHalfEven(exact.digits, exact.scale, spec.maxFractionDigits);
-  const asText = rounded.toString().padStart(spec.maxFractionDigits + 1, '0');
+  let asText = rounded.toString().padStart(spec.maxFractionDigits + 1, '0');
+  // Rounding uses the exact binary value -- `-0.015` prints `-0.01` because the double is
+  // 0.0149999999999999994, and rounding the shortest form `15` would carry it up. **Printing** is
+  // different: Java emits the shortest round-trip digits and pads the rest with zeros, so
+  // `Double.MAX_VALUE` is 179,769,313,486,231,570 followed by 292 zeros rather than its 309-digit
+  // exact expansion. Both halves matter, and the oracle's `DF max` row is the one that shows the
+  // second: it was skipped for as long as the row parser was broken.
+  const shortest = readShortest(Math.abs(value));
+  const firstSignificant = asText.search(/[1-9]/);
+  if (firstSignificant >= 0 && asText.length - firstSignificant > shortest.digits.length) {
+    asText = asText.slice(0, firstSignificant + shortest.digits.length)
+      + '0'.repeat(asText.length - firstSignificant - shortest.digits.length);
+  }
   const split = asText.length - spec.maxFractionDigits;
   let integerPart = asText.slice(0, split);
   let fractionPart = asText.slice(split);
